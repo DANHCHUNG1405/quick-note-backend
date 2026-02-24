@@ -2,22 +2,17 @@ import {
   Body,
   Controller,
   Post,
+  Res,
+  Req,
   HttpCode,
   HttpStatus,
-  UsePipes,
-  ValidationPipe,
 } from '@nestjs/common';
+import type { Response, Request } from 'express';
 import { AuthService } from './auth.service';
-import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 
 @Controller('auth')
-@UsePipes(
-  new ValidationPipe({
-    whitelist: true, // loại bỏ field không khai báo trong DTO
-    forbidNonWhitelisted: true, // throw error nếu có field thừa
-  }),
-)
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
@@ -28,8 +23,53 @@ export class AuthController {
   }
 
   @Post('login')
-  @HttpCode(HttpStatus.OK)
-  login(@Body() body: LoginDto) {
-    return this.authService.login(body);
+  async login(
+    @Body() body: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { accessToken, refreshToken } = await this.authService.login(body);
+
+    res.cookie('access_token', accessToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000,
+    });
+
+    res.cookie('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return { message: 'Login successful' };
+  }
+
+  @Post('refresh')
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const refreshToken = req.cookies['refresh_token'] as string;
+
+    const { accessToken } = await this.authService.refresh(refreshToken);
+
+    res.cookie('access_token', accessToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000,
+    });
+
+    return { message: 'Refreshed' };
+  }
+
+  @Post('logout')
+  logout(@Res({ passthrough: true }) res: Response) {
+    res.clearCookie('access_token');
+    res.clearCookie('refresh_token');
+
+    return { message: 'Logged out' };
   }
 }

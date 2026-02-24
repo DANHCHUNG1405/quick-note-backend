@@ -10,9 +10,9 @@ import { StringValue } from 'ms';
   imports: [
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET,
+      secret: process.env.JWT_ACCESS_SECRET,
       signOptions: {
-        expiresIn: (process.env.JWT_EXPIRES_IN ?? '7d') as StringValue,
+        expiresIn: (process.env.JWT_ACCESS_SECRET ?? '15m') as StringValue,
       },
     }),
   ],
