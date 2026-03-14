@@ -54,6 +54,27 @@ export class NotesService {
   }
 
   /**
+   * GET NOTE BY ID
+   */
+  async getById(userId: string, noteId: string): Promise<Note> {
+    const note = await this.prisma.notes.findFirst({
+      where: {
+        id: noteId,
+        deleted_at: null,
+        topics: {
+          user_id: userId,
+        },
+      },
+    });
+
+    if (!note) {
+      throw new BadRequestException('Note not found');
+    }
+
+    return note;
+  }
+
+  /**
    * UPDATE NOTE
    */
   async update(

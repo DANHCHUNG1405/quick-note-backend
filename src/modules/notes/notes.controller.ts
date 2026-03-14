@@ -33,6 +33,11 @@ export class NotesController {
     return this.notesService.getByTopic(user.userId, topicId);
   }
 
+  @Get(':id')
+  getById(@CurrentUser() user: CurrentUserData, @Param('id') id: string) {
+    return this.notesService.getById(user.userId, id);
+  }
+
   @Patch(':id')
   update(
     @CurrentUser() user: CurrentUserData,

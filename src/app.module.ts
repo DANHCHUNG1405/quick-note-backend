@@ -8,6 +8,7 @@ import { UsersModule } from './modules/users/users.module';
 import { TopicsModule } from './modules/topics/topics.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
+import { NotesModule } from './modules/notes/notes.module';
 @Module({
   imports: [
     ConfigModule.forRoot(),
@@ -15,6 +16,7 @@ import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
     PrismaModule,
     UsersModule,
     TopicsModule,
+    NotesModule,
   ],
   controllers: [AppController],
   providers: [
