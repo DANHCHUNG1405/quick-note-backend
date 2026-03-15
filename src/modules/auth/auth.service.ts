@@ -67,6 +67,12 @@ export class AuthService {
 
     const user = await this.prisma.users.findUnique({
       where: { email },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        password_hash: true,
+      },
     });
 
     if (!user) {
@@ -79,7 +85,16 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    return this.generateTokens(user.id, user.email);
+    const tokens = await this.generateTokens(user.id, user.email);
+
+    return {
+      ...tokens,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+      },
+    };
   }
 
   async refresh(refreshToken: string) {
