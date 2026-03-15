@@ -108,6 +108,37 @@ export class NotesService {
   }
 
   /**
+   * PIN / UNPIN NOTE
+   */
+  async setPinned(
+    userId: string,
+    noteId: string,
+    isPinned: boolean,
+  ): Promise<Note> {
+    const note = await this.prisma.notes.findFirst({
+      where: {
+        id: noteId,
+        deleted_at: null,
+        topics: {
+          user_id: userId,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!note) {
+      throw new BadRequestException('Note not found');
+    }
+
+    return this.prisma.notes.update({
+      where: { id: noteId },
+      data: {
+        is_pinned: isPinned,
+      },
+    });
+  }
+
+  /**
    * SOFT DELETE NOTE
    */
   async softDelete(userId: string, noteId: string) {

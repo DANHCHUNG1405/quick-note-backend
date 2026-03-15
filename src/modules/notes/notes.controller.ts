@@ -47,6 +47,16 @@ export class NotesController {
     return this.notesService.update(user.userId, id, dto);
   }
 
+  @Patch(':id/pin')
+  pin(@CurrentUser() user: CurrentUserData, @Param('id') id: string) {
+    return this.notesService.setPinned(user.userId, id, true);
+  }
+
+  @Patch(':id/unpin')
+  unpin(@CurrentUser() user: CurrentUserData, @Param('id') id: string) {
+    return this.notesService.setPinned(user.userId, id, false);
+  }
+
   @Delete(':id')
   remove(@CurrentUser() user: CurrentUserData, @Param('id') id: string) {
     return this.notesService.softDelete(user.userId, id);
