@@ -8,7 +8,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
   app.use(cookieParser());
   app.enableCors({
-    origin: 'http://localhost:3000',
+    origin: ['http://localhost:3000', 'https://quick-note-pi.vercel.app'],
     credentials: true,
   });
   await app.listen(process.env.PORT ?? 8080);
