@@ -52,6 +52,25 @@ export class TopicsService {
   }
 
   /**
+   * GET TOPIC BY ID
+   */
+  async getById(userId: string, topicId: string) {
+    const topic = await this.prisma.topics.findFirst({
+      where: {
+        id: topicId,
+        user_id: userId,
+        deleted_at: null,
+      },
+    });
+
+    if (!topic) {
+      throw new BadRequestException('Topic not found');
+    }
+
+    return topic;
+  }
+
+  /**
    * SOFT DELETE TOPIC
    */
   async softDelete(userId: string, topicId: string) {

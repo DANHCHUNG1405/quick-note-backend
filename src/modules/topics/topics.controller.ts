@@ -28,6 +28,11 @@ export class TopicsController {
     return this.topicsService.getTree(user.userId);
   }
 
+  @Get(':id')
+  getById(@CurrentUser() user: CurrentUserData, @Param('id') id: string) {
+    return this.topicsService.getById(user.userId, id);
+  }
+
   @Delete(':id')
   remove(@CurrentUser() user: CurrentUserData, @Param('id') id: string) {
     return this.topicsService.softDelete(user.userId, id);
