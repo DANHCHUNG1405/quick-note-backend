@@ -46,8 +46,12 @@ export class AuthService {
     };
   }
 
-  private async generateTokens(userId: string, email: string) {
-    const payload = { sub: userId, email };
+  private async generateTokens(
+    userId: string,
+    email: string,
+    username: string | null,
+  ) {
+    const payload = { sub: userId, email, username };
 
     const accessToken = await this.jwtService.signAsync(payload, {
       secret: process.env.JWT_ACCESS_SECRET,
@@ -85,7 +89,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const tokens = await this.generateTokens(user.id, user.email);
+    const tokens = await this.generateTokens(
+      user.id,
+      user.email,
+      user.username,
+    );
 
     return {
       ...tokens,
@@ -110,7 +118,11 @@ export class AuthService {
         },
       );
 
-      return this.generateTokens(payload.sub, payload.email);
+      return this.generateTokens(
+        payload.sub,
+        payload.email,
+        payload.username ?? null,
+      );
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }

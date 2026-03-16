@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Delete,
   Body,
   Param,
@@ -11,6 +12,7 @@ import { TopicsService } from './topics.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { CreateTopicDto } from './dto/create-topic.dto';
+import { RenameTopicDto } from './dto/rename-topic.dto';
 import type { CurrentUserData } from '../auth/current-user.decorator';
 
 @UseGuards(JwtAuthGuard)
@@ -31,6 +33,15 @@ export class TopicsController {
   @Get(':id')
   getById(@CurrentUser() user: CurrentUserData, @Param('id') id: string) {
     return this.topicsService.getById(user.userId, id);
+  }
+
+  @Patch(':id/rename')
+  rename(
+    @CurrentUser() user: CurrentUserData,
+    @Param('id') id: string,
+    @Body() dto: RenameTopicDto,
+  ) {
+    return this.topicsService.rename(user.userId, id, dto);
   }
 
   @Delete(':id')

@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTopicDto } from './dto/create-topic.dto';
+import { RenameTopicDto } from './dto/rename-topic.dto';
 import type { TopicNode } from './type/topic-node.type';
 import { topics as TopicModel } from '@prisma/client';
 
@@ -68,6 +69,31 @@ export class TopicsService {
     }
 
     return topic;
+  }
+
+  /**
+   * RENAME TOPIC
+   */
+  async rename(userId: string, topicId: string, dto: RenameTopicDto) {
+    const topic = await this.prisma.topics.findFirst({
+      where: {
+        id: topicId,
+        user_id: userId,
+        deleted_at: null,
+      },
+      select: { id: true },
+    });
+
+    if (!topic) {
+      throw new BadRequestException('Topic not found');
+    }
+
+    return this.prisma.topics.update({
+      where: { id: topicId },
+      data: {
+        name: dto.title,
+      },
+    });
   }
 
   /**

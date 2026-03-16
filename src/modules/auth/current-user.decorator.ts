@@ -3,6 +3,7 @@ import { AuthRequest } from './auth-request.interface';
 export interface CurrentUserData {
   userId: string;
   email: string;
+  username: string | null;
 }
 
 export const CurrentUser = createParamDecorator(
