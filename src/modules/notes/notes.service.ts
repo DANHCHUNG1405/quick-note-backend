@@ -71,7 +71,29 @@ export class NotesService {
       throw new BadRequestException('Note not found');
     }
 
-    return note;
+    return this.prisma.notes.update({
+      where: { id: noteId },
+      data: { last_viewed_at: new Date() },
+    });
+  }
+
+  /**
+   * GET RECENTLY VIEWED NOTES
+   */
+  async getRecentViewed(userId: string, limit = 5): Promise<Note[]> {
+    return this.prisma.notes.findMany({
+      where: {
+        deleted_at: null,
+        last_viewed_at: { not: null },
+        topics: {
+          user_id: userId,
+        },
+      },
+      orderBy: {
+        last_viewed_at: 'desc',
+      },
+      take: limit,
+    });
   }
 
   /**

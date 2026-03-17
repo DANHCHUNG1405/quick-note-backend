@@ -7,4 +7,5 @@ export type Note = {
   created_at: Date | null;
   updated_at: Date | null;
   deleted_at: Date | null;
+  last_viewed_at?: Date | null;
 };

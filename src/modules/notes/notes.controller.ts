@@ -33,6 +33,11 @@ export class NotesController {
     return this.notesService.getByTopic(user.userId, topicId);
   }
 
+  @Get('recent')
+  getRecent(@CurrentUser() user: CurrentUserData) {
+    return this.notesService.getRecentViewed(user.userId, 5);
+  }
+
   @Get(':id')
   getById(@CurrentUser() user: CurrentUserData, @Param('id') id: string) {
     return this.notesService.getById(user.userId, id);

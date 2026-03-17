@@ -8,21 +8,22 @@ datasource db {
 }
 
 model notes {
-  id         String    @id @default(dbgenerated("public.uuid_generate_v4()")) @db.Uuid
-  topic_id   String    @db.Uuid
-  title      String    @db.VarChar(255)
-  content    String?
-  is_pinned  Boolean?  @default(false)
-  created_at DateTime? @default(now()) @db.Timestamp(6)
-  updated_at DateTime? @default(now()) @db.Timestamp(6)
-  deleted_at DateTime? @db.Timestamp(6)
-  topics     topics    @relation(fields: [topic_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_notes_topic")
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  topic_id       String    @db.Uuid
+  title          String    @db.VarChar(255)
+  content        String?
+  is_pinned      Boolean?  @default(false)
+  created_at     DateTime? @default(now()) @db.Timestamp(6)
+  updated_at     DateTime? @default(now()) @db.Timestamp(6)
+  deleted_at     DateTime? @db.Timestamp(6)
+  last_viewed_at DateTime? @db.Timestamp(6)
+  topics         topics    @relation(fields: [topic_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_notes_topic")
 
   @@index([topic_id], map: "idx_notes_topic_id")
 }
 
 model topics {
-  id           String    @id @default(dbgenerated("public.uuid_generate_v4()")) @db.Uuid
+  id           String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   user_id      String    @db.Uuid
   name         String    @db.VarChar(255)
   order_index  Int?      @default(0)
@@ -31,7 +32,7 @@ model topics {
   deleted_at   DateTime? @db.Timestamp(6)
   parent_id    String?   @db.Uuid
   notes        notes[]
-  topics       topics?   @relation("topicsTotopics", fields: [parent_id], references: [id], onUpdate: NoAction, map: "fk_topics_parent")
+  topics       topics?   @relation("topicsTotopics", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_topics_parent")
   other_topics topics[]  @relation("topicsTotopics")
   users        users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_topics_user")
 
@@ -40,7 +41,7 @@ model topics {
 }
 
 model users {
-  id            String    @id @default(dbgenerated("public.uuid_generate_v4()")) @db.Uuid
+  id            String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   email         String    @unique @db.VarChar(255)
   password_hash String
   created_at    DateTime? @default(now()) @db.Timestamp(6)
