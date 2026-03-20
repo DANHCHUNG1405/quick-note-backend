@@ -14,7 +14,7 @@ export class UsersService {
       select: {
         id: true,
         email: true,
-        username: true,
+        fullname: true,
         created_at: true,
       },
     });
@@ -29,16 +29,16 @@ export class UsersService {
   /**
    * PATCH /users/me
    */
-  async updateMe(userId: string, data: { username?: string }) {
+  async updateMe(userId: string, data: { fullname?: string }) {
     return this.prisma.users.update({
       where: { id: userId },
       data: {
-        username: data.username,
+        fullname: data.fullname,
       },
       select: {
         id: true,
         email: true,
-        username: true,
+        fullname: true,
       },
     });
   }

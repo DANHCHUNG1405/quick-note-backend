@@ -17,7 +17,7 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    const { email, password } = dto;
+    const { email, password, fullname } = dto;
 
     const existingUser = await this.prisma.users.findUnique({
       where: { email },
@@ -33,10 +33,12 @@ export class AuthService {
       data: {
         email,
         password_hash: passwordHash,
+        fullname: fullname ?? null,
       },
       select: {
         id: true,
         email: true,
+        fullname: true,
       },
     });
 
@@ -49,9 +51,9 @@ export class AuthService {
   private async generateTokens(
     userId: string,
     email: string,
-    username: string | null,
+    fullname: string | null,
   ) {
-    const payload = { sub: userId, email, username };
+    const payload = { sub: userId, email, fullname };
 
     const accessToken = await this.jwtService.signAsync(payload, {
       secret: process.env.JWT_ACCESS_SECRET,
@@ -74,7 +76,7 @@ export class AuthService {
       select: {
         id: true,
         email: true,
-        username: true,
+        fullname: true,
         password_hash: true,
       },
     });
@@ -92,7 +94,7 @@ export class AuthService {
     const tokens = await this.generateTokens(
       user.id,
       user.email,
-      user.username,
+      user.fullname,
     );
 
     return {
@@ -100,7 +102,7 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
-        username: user.username,
+        fullname: user.fullname,
       },
     };
   }
@@ -121,7 +123,7 @@ export class AuthService {
       return this.generateTokens(
         payload.sub,
         payload.email,
-        payload.username ?? null,
+        payload.fullname ?? null,
       );
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
