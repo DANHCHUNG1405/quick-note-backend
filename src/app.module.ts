@@ -9,6 +9,8 @@ import { TopicsModule } from './modules/topics/topics.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 import { NotesModule } from './modules/notes/notes.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot(),
@@ -17,6 +19,7 @@ import { NotesModule } from './modules/notes/notes.module';
     UsersModule,
     TopicsModule,
     NotesModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

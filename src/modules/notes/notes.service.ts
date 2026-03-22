@@ -168,7 +168,7 @@ export class NotesService {
    * SHARE NOTE (VIEW / EDIT)
    */
   async shareNote(userId: string, noteId: string, dto: ShareNoteDto) {
-    await this.assertNoteOwner(userId, noteId);
+    const note = await this.assertNoteOwner(userId, noteId);
 
     const shareUser = await this.resolveShareUser(dto);
     if (!shareUser) {
@@ -179,21 +179,41 @@ export class NotesService {
       throw new BadRequestException('Cannot share note with yourself');
     }
 
-    return this.prisma.note_shares.upsert({
+    const existingShare = await this.prisma.note_shares.findUnique({
       where: {
         note_id_user_id: {
           note_id: noteId,
           user_id: shareUser.id,
         },
       },
-      update: {
-        permission: dto.permission,
-      },
-      create: {
-        note_id: noteId,
-        user_id: shareUser.id,
-        permission: dto.permission,
-      },
+      select: { id: true },
+    });
+
+    if (existingShare) {
+      return this.prisma.note_shares.update({
+        where: { id: existingShare.id },
+        data: { permission: dto.permission },
+      });
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const share = await tx.note_shares.create({
+        data: {
+          note_id: noteId,
+          user_id: shareUser.id,
+          permission: dto.permission,
+        },
+      });
+
+      await tx.notifications.create({
+        data: {
+          user_id: shareUser.id,
+          type: 'note_shared',
+          message: `A note "${note.title}" was shared with you.`,
+        },
+      });
+
+      return share;
     });
   }
 
@@ -339,12 +359,14 @@ export class NotesService {
           user_id: userId,
         },
       },
-      select: { id: true },
+      select: { id: true, title: true },
     });
 
     if (!note) {
       throw new BadRequestException('Note not found');
     }
+
+    return note;
   }
 
   private async getNoteAccess(userId: string, noteId: string) {
