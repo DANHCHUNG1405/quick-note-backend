@@ -10,10 +10,14 @@ import {
   NOTE_SHARE_PERMISSIONS,
 } from './types/note-share-permission.type';
 import { SharedNote } from './types/shared-note.type';
+import { NotificationsEventsService } from '../notifications/notifications.events.service';
 
 @Injectable()
 export class NotesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsEvents: NotificationsEventsService,
+  ) {}
 
   /**
    * CREATE NOTE
@@ -196,25 +200,23 @@ export class NotesService {
       });
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const share = await tx.note_shares.create({
-        data: {
-          note_id: noteId,
-          user_id: shareUser.id,
-          permission: dto.permission,
-        },
-      });
-
-      await tx.notifications.create({
-        data: {
-          user_id: shareUser.id,
-          type: 'note_shared',
-          message: `A note "${note.title}" was shared with you.`,
-        },
-      });
-
-      return share;
+    const share = await this.prisma.note_shares.create({
+      data: {
+        note_id: noteId,
+        user_id: shareUser.id,
+        permission: dto.permission,
+      },
     });
+
+    void this.notificationsEvents.publishNoteShared({
+      recipientUserId: shareUser.id,
+      noteId,
+      noteTitle: note.title,
+      sharedByUserId: userId,
+      sharedAt: new Date().toISOString(),
+    });
+
+    return share;
   }
 
   /**
