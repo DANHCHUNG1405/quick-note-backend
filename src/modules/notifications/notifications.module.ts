@@ -9,7 +9,7 @@ import { NOTIFICATIONS_EXCHANGE } from './notifications.constants';
 
 @Module({
   imports: [
-    RabbitMQModule.forRoot(RabbitMQModule, {
+    RabbitMQModule.forRoot({
       exchanges: [{ name: NOTIFICATIONS_EXCHANGE, type: 'topic' }],
       uri: process.env.RABBITMQ_URI ?? 'amqp://localhost:5672',
       connectionInitOptions: { wait: false },
