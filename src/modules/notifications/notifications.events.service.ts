@@ -1,11 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AmqpConnection, RabbitSubscribe } from '@golevelup/nestjs-rabbitmq';
 import { PrismaService } from '../../prisma/prisma.service';
-import {
-  NOTIFICATIONS_EXCHANGE,
-  NOTE_SHARED_QUEUE,
-  NOTE_SHARED_ROUTING_KEY,
-} from './notifications.constants';
+
 import {
   type NoteSharedEvent,
   type NotificationSocketPayload,
@@ -17,31 +12,22 @@ export class NotificationsEventsService {
   private readonly logger = new Logger(NotificationsEventsService.name);
 
   constructor(
-    private readonly amqpConnection: AmqpConnection,
     private readonly prisma: PrismaService,
     private readonly gateway: NotificationsGateway,
   ) {}
 
-  async publishNoteShared(payload: NoteSharedEvent) {
-    try {
-      await this.amqpConnection.publish(
-        NOTIFICATIONS_EXCHANGE,
-        NOTE_SHARED_ROUTING_KEY,
-        payload,
-      );
-    } catch (error) {
-      this.logger.error(
-        'Failed to publish note shared event',
-        error instanceof Error ? error.stack : String(error),
-      );
-    }
+  async publishNoteShared(_payload: NoteSharedEvent) {
+    // RabbitMQ temporarily disabled.
+    // This method is kept to avoid breaking callers.
+    this.logger.warn('RabbitMQ disabled: publishNoteShared skipped');
   }
 
-  @RabbitSubscribe({
-    exchange: NOTIFICATIONS_EXCHANGE,
-    routingKey: NOTE_SHARED_ROUTING_KEY,
-    queue: NOTE_SHARED_QUEUE,
-  })
+  // RabbitMQ temporarily disabled.
+  // @RabbitSubscribe({
+  //   exchange: NOTIFICATIONS_EXCHANGE,
+  //   routingKey: NOTE_SHARED_ROUTING_KEY,
+  //   queue: NOTE_SHARED_QUEUE,
+  // })
   async handleNoteSharedEvent(event: NoteSharedEvent) {
     if (
       !event?.recipientUserId ||
@@ -84,3 +70,6 @@ export class NotificationsEventsService {
     }
   }
 }
+
+
+
