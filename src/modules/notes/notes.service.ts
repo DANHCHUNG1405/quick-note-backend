@@ -230,11 +230,22 @@ export class NotesService {
   ) {
     await this.assertNoteOwner(userId, noteId);
 
-    return this.prisma.note_shares.updateMany({
+    const existingShare = await this.prisma.note_shares.findUnique({
       where: {
-        note_id: noteId,
-        user_id: shareUserId,
+        note_id_user_id: {
+          note_id: noteId,
+          user_id: shareUserId,
+        },
       },
+      select: { id: true },
+    });
+
+    if (!existingShare) {
+      throw new BadRequestException('Share not found');
+    }
+
+    return this.prisma.note_shares.update({
+      where: { id: existingShare.id },
       data: {
         permission: dto.permission,
       },

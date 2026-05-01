@@ -33,13 +33,6 @@ export class AuthController {
     const { accessToken, refreshToken, user } =
       await this.authService.login(body);
 
-    res.cookie('access_token', accessToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      maxAge: 15 * 60 * 1000,
-    });
-
     res.cookie('refresh_token', refreshToken, {
       httpOnly: true,
       secure: true,
@@ -47,32 +40,21 @@ export class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    return { message: 'Login successful', user };
+    return { message: 'Login successful', access_token: accessToken, user };
   }
 
   @Public()
   @Post('refresh')
-  async refresh(
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async refresh(@Req() req: Request) {
     const refreshToken = req.cookies['refresh_token'] as string;
 
     const { accessToken } = await this.authService.refresh(refreshToken);
 
-    res.cookie('access_token', accessToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      maxAge: 15 * 60 * 1000,
-    });
-
-    return { message: 'Refreshed' };
+    return { message: 'Refreshed', access_token: accessToken };
   }
 
   @Post('logout')
   logout(@Res({ passthrough: true }) res: Response) {
-    res.clearCookie('access_token');
     res.clearCookie('refresh_token');
 
     return { message: 'Logged out' };

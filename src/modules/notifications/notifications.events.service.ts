@@ -1,11 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { AmqpConnection, RabbitSubscribe } from '@golevelup/nestjs-rabbitmq';
 import { PrismaService } from '../../prisma/prisma.service';
-
+import {
+  NOTE_SHARED_QUEUE,
+  NOTE_SHARED_ROUTING_KEY,
+  NOTIFICATIONS_EXCHANGE,
+} from './notifications.constants';
 import {
   type NoteSharedEvent,
   type NotificationSocketPayload,
 } from './notifications.types';
 import { NotificationsGateway } from './notifications.gateway';
+import { NotificationsEmailService } from './notifications.email.service';
 
 @Injectable()
 export class NotificationsEventsService {
@@ -14,20 +20,30 @@ export class NotificationsEventsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gateway: NotificationsGateway,
+    private readonly amqpConnection: AmqpConnection,
+    private readonly emailService: NotificationsEmailService,
   ) {}
 
-  async publishNoteShared(_payload: NoteSharedEvent) {
-    // RabbitMQ temporarily disabled.
-    // This method is kept to avoid breaking callers.
-    this.logger.warn('RabbitMQ disabled: publishNoteShared skipped');
+  async publishNoteShared(payload: NoteSharedEvent) {
+    try {
+      await this.amqpConnection.publish(
+        NOTIFICATIONS_EXCHANGE,
+        NOTE_SHARED_ROUTING_KEY,
+        payload,
+      );
+    } catch (error) {
+      this.logger.warn(
+        'Failed to publish note shared event',
+        error instanceof Error ? error.message : String(error),
+      );
+    }
   }
 
-  // RabbitMQ temporarily disabled.
-  // @RabbitSubscribe({
-  //   exchange: NOTIFICATIONS_EXCHANGE,
-  //   routingKey: NOTE_SHARED_ROUTING_KEY,
-  //   queue: NOTE_SHARED_QUEUE,
-  // })
+  @RabbitSubscribe({
+    exchange: NOTIFICATIONS_EXCHANGE,
+    routingKey: NOTE_SHARED_ROUTING_KEY,
+    queue: NOTE_SHARED_QUEUE,
+  })
   async handleNoteSharedEvent(event: NoteSharedEvent) {
     if (
       !event?.recipientUserId ||
@@ -68,8 +84,23 @@ export class NotificationsEventsService {
         error instanceof Error ? error.message : String(error),
       );
     }
+
+    const users = await this.prisma.users.findMany({
+      where: { id: { in: [event.recipientUserId, event.sharedByUserId] } },
+      select: { id: true, email: true, fullname: true },
+    });
+
+    const recipient = users.find((user) => user.id === event.recipientUserId);
+    const sharedBy = users.find((user) => user.id === event.sharedByUserId);
+
+    if (recipient?.email) {
+      await this.emailService.sendNoteSharedEmail({
+        to: recipient.email,
+        noteTitle: event.noteTitle,
+        sharedByName:
+          sharedBy?.fullname?.trim() || sharedBy?.email?.trim() || 'Someone',
+        recipientName: recipient.fullname ?? null,
+      });
+    }
   }
 }
-
-
-

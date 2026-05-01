@@ -5,6 +5,7 @@ import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 import { NotificationsGateway } from './notifications.gateway';
 import { NotificationsEventsService } from './notifications.events.service';
+import { NotificationsEmailService } from './notifications.email.service';
 import { NOTIFICATIONS_EXCHANGE } from './notifications.constants';
 
 @Module({
@@ -23,6 +24,7 @@ import { NOTIFICATIONS_EXCHANGE } from './notifications.constants';
     NotificationsService,
     NotificationsGateway,
     NotificationsEventsService,
+    NotificationsEmailService,
   ],
   exports: [NotificationsEventsService],
 })

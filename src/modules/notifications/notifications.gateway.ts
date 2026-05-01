@@ -83,36 +83,6 @@ export class NotificationsGateway implements OnGatewayConnection {
       return queryToken;
     }
 
-    const cookieHeader = client.handshake.headers?.cookie;
-    if (typeof cookieHeader === 'string') {
-      const cookies = this.parseCookies(cookieHeader);
-      if (cookies.access_token) {
-        return cookies.access_token;
-      }
-    }
-
     return null;
-  }
-
-  private parseCookies(cookieHeader: string): Record<string, string> {
-    return cookieHeader
-      .split(';')
-      .map((cookie) => cookie.trim())
-      .filter((cookie) => cookie.length > 0)
-      .reduce((acc, cookie) => {
-        const separatorIndex = cookie.indexOf('=');
-        if (separatorIndex === -1) {
-          return acc;
-        }
-
-        const key = cookie.slice(0, separatorIndex).trim();
-        const value = cookie.slice(separatorIndex + 1).trim();
-        if (!key) {
-          return acc;
-        }
-
-        acc[key] = decodeURIComponent(value);
-        return acc;
-      }, {} as Record<string, string>);
   }
 }
