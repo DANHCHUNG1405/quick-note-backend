@@ -13,11 +13,13 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { TodosModule } from './modules/todos/todos.module';
 import { TodoGroupsModule } from './modules/todo-groups/todo-groups.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
+import { RateLimitModule } from './common/rate-limit/rate-limit.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
     RedisModule,
+    RateLimitModule,
     AuthModule,
     PrismaModule,
     UsersModule,
