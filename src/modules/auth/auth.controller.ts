@@ -54,9 +54,26 @@ export class AuthController {
   }
 
   @Post('logout')
-  logout(@Res({ passthrough: true }) res: Response) {
+  async logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const refreshToken = req.cookies['refresh_token'] as string | undefined;
+    const accessToken = this.extractBearerToken(req);
+
+    await this.authService.logout(accessToken ?? null, refreshToken ?? null);
+
     res.clearCookie('refresh_token');
 
     return { message: 'Logged out' };
+  }
+
+  private extractBearerToken(req: Request) {
+    const authorization = req.headers.authorization;
+    if (!authorization?.startsWith('Bearer ')) {
+      return null;
+    }
+
+    return authorization.slice(7).trim() || null;
   }
 }

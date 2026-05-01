@@ -9,11 +9,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import type { JwtPayload } from './jwt-payload.interface';
+import { TokenBlacklistService } from './token-blacklist.service';
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly tokenBlacklist: TokenBlacklistService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -113,6 +115,13 @@ export class AuthService {
     }
 
     try {
+      const isBlacklisted =
+        await this.tokenBlacklist.isRefreshTokenBlacklisted(refreshToken);
+
+      if (isBlacklisted) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
       const payload = await this.jwtService.verifyAsync<JwtPayload>(
         refreshToken,
         {
@@ -128,5 +137,16 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }
+  }
+
+  async logout(accessToken: string | null, refreshToken: string | null) {
+    await Promise.all([
+      accessToken
+        ? this.tokenBlacklist.blacklistAccessToken(accessToken)
+        : Promise.resolve(),
+      refreshToken
+        ? this.tokenBlacklist.blacklistRefreshToken(refreshToken)
+        : Promise.resolve(),
+    ]);
   }
 }
