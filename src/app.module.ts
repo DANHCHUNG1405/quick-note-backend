@@ -10,6 +10,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 import { NotesModule } from './modules/notes/notes.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { TodosModule } from './modules/todos/todos.module';
+import { TodoGroupsModule } from './modules/todo-groups/todo-groups.module';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     TopicsModule,
     NotesModule,
     NotificationsModule,
+    TodosModule,
+    TodoGroupsModule,
   ],
   controllers: [AppController],
   providers: [
