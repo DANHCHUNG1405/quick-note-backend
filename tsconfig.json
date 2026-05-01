@@ -14,11 +14,6 @@
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
-    "paths": {
-      "amqp-connection-manager/dist/types/*": [
-        "node_modules/amqp-connection-manager/dist/esm/*"
-      ]
-    },
     "incremental": true,
     "skipLibCheck": false,
     "strictNullChecks": true,

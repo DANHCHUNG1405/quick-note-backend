@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, todo_groups as TodoGroupModel } from '@prisma/client';
+import { RedisCacheService } from '../../infrastructure/redis/redis-cache.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTodoDto } from '../todos/dto/create-todo.dto';
 import { TodoQueryDto } from '../todos/dto/todo-query.dto';
@@ -36,56 +37,63 @@ type TodoGroupDetailResponse = TodoGroupModel & {
 export class TodoGroupsService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly cache: RedisCacheService,
     private readonly todosService: TodosService,
   ) {}
 
   async list(userId: string, query: TodoGroupQueryDto): Promise<TodoGroupListResponse> {
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
+    return this.cache.rememberJson(
+      `todo-groups:user:${userId}:list:${this.serializeQuery(query)}`,
+      45,
+      async () => {
+        const page = query.page ?? 1;
+        const limit = query.limit ?? 20;
 
-    const groups = await this.prisma.todo_groups.findMany({
-      where: this.buildListWhere(userId, query),
-      orderBy: [{ order_index: 'asc' }, { created_at: 'desc' }],
-    });
+        const groups = await this.prisma.todo_groups.findMany({
+          where: this.buildListWhere(userId, query),
+          orderBy: [{ order_index: 'asc' }, { created_at: 'desc' }],
+        });
 
-    const counts = groups.length
-      ? await this.prisma.todos.groupBy({
-          by: ['group_id'],
-          where: {
-            user_id: userId,
-            deleted_at: null,
-            group_id: {
-              in: groups.map((group) => group.id),
+        const counts = groups.length
+          ? await this.prisma.todos.groupBy({
+              by: ['group_id'],
+              where: {
+                user_id: userId,
+                deleted_at: null,
+                group_id: {
+                  in: groups.map((group) => group.id),
+                },
+              },
+              _count: {
+                _all: true,
+              },
+            })
+          : [];
+
+        const countMap = new Map(
+          counts.map((item) => [item.group_id, item._count._all]),
+        );
+
+        const total = groups.length;
+        const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+        const start = (page - 1) * limit;
+
+        return {
+          items: groups.slice(start, start + limit).map((group) => ({
+            ...group,
+            _count: {
+              todos: countMap.get(group.id) ?? 0,
             },
+          })),
+          meta: {
+            page,
+            limit,
+            total,
+            totalPages,
           },
-          _count: {
-            _all: true,
-          },
-        })
-      : [];
-
-    const countMap = new Map(
-      counts.map((item) => [item.group_id, item._count._all]),
-    );
-
-    const total = groups.length;
-    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
-    const start = (page - 1) * limit;
-
-    return {
-      items: groups.slice(start, start + limit).map((group) => ({
-        ...group,
-        _count: {
-          todos: countMap.get(group.id) ?? 0,
-        },
-      })),
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages,
+        };
       },
-    };
+    );
   }
 
   async create(userId: string, dto: CreateTodoGroupDto): Promise<TodoGroupModel> {
@@ -97,7 +105,7 @@ export class TodoGroupsService {
       dto.group_date ?? null,
     );
 
-    return this.prisma.todo_groups.create({
+    const group = await this.prisma.todo_groups.create({
       data: {
         user_id: userId,
         topic_id: resolved.topicId,
@@ -109,35 +117,44 @@ export class TodoGroupsService {
         order_index: dto.order_index ?? 0,
       },
     });
+
+    await this.invalidateGroupCaches(userId);
+    return group;
   }
 
   async getById(userId: string, groupId: string): Promise<TodoGroupDetailResponse> {
-    const group = await this.findOwnedGroupOrThrow(userId, groupId);
-    const todos = await this.prisma.todos.findMany({
-      where: {
-        user_id: userId,
-        group_id: groupId,
-        deleted_at: null,
-      },
-      include: {
-        todo_groups: {
-          select: {
-            id: true,
-            name: true,
-            group_type: true,
-            group_date: true,
-            deleted_at: true,
+    return this.cache.rememberJson(
+      `todo-groups:user:${userId}:item:${groupId}`,
+      45,
+      async () => {
+        const group = await this.findOwnedGroupOrThrow(userId, groupId);
+        const todos = await this.prisma.todos.findMany({
+          where: {
+            user_id: userId,
+            group_id: groupId,
+            deleted_at: null,
           },
-        },
-      },
-    });
+          include: {
+            todo_groups: {
+              select: {
+                id: true,
+                name: true,
+                group_type: true,
+                group_date: true,
+                deleted_at: true,
+              },
+            },
+          },
+        });
 
-    return {
-      ...group,
-      todos: this.todosService
-        .sortTodoItems(todos)
-        .map((todo) => this.todosService.toTodoWithGroup(todo)),
-    };
+        return {
+          ...group,
+          todos: this.todosService
+            .sortTodoItems(todos)
+            .map((todo) => this.todosService.toTodoWithGroup(todo)),
+        };
+      },
+    );
   }
 
   async update(
@@ -187,10 +204,13 @@ export class TodoGroupsService {
       data.group_date = resolved.groupDate;
     }
 
-    return this.prisma.todo_groups.update({
+    const group = await this.prisma.todo_groups.update({
       where: { id: groupId },
       data,
     });
+
+    await this.invalidateGroupCaches(userId);
+    return group;
   }
 
   async softDelete(userId: string, groupId: string) {
@@ -215,17 +235,24 @@ export class TodoGroupsService {
       }),
     ]);
 
+    await this.invalidateGroupCaches(userId);
     return { message: 'Todo group deleted successfully' };
   }
 
   async getTodos(userId: string, groupId: string, query: TodoQueryDto) {
     await this.findOwnedGroupOrThrow(userId, groupId);
-    return this.todosService.listByGroup(userId, groupId, query);
+    return this.cache.rememberJson(
+      `todo-groups:user:${userId}:item:${groupId}:todos:${JSON.stringify(query)}`,
+      45,
+      () => this.todosService.listByGroup(userId, groupId, query),
+    );
   }
 
   async createTodo(userId: string, groupId: string, dto: CreateTodoDto) {
     const group = await this.findOwnedGroupOrThrow(userId, groupId);
-    return this.todosService.createInGroup(userId, group, dto);
+    const todo = await this.todosService.createInGroup(userId, group, dto);
+    await this.invalidateGroupCaches(userId);
+    return todo;
   }
 
   private buildListWhere(
@@ -399,5 +426,24 @@ export class TodoGroupsService {
     }
 
     return value.toISOString().slice(0, 10);
+  }
+
+  private serializeQuery(query: TodoGroupQueryDto) {
+    return JSON.stringify({
+      groupDate: query.groupDate ?? null,
+      groupType: query.groupType ?? null,
+      limit: query.limit ?? 20,
+      noteId: query.noteId ?? null,
+      page: query.page ?? 1,
+      search: query.search?.trim() || null,
+      topicId: query.topicId ?? null,
+    });
+  }
+
+  private async invalidateGroupCaches(userId: string) {
+    await Promise.all([
+      this.cache.invalidateByPrefix(`todo-groups:user:${userId}:`),
+      this.cache.invalidateByPrefix(`todos:user:${userId}:`),
+    ]);
   }
 }

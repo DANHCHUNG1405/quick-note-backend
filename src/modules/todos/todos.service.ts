@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, todo_groups, todos as TodoModel } from '@prisma/client';
+import { RedisCacheService } from '../../infrastructure/redis/redis-cache.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTodoDto } from './dto/create-todo.dto';
 import { TodoQueryDto } from './dto/todo-query.dto';
@@ -57,19 +58,30 @@ type TodoWithGroupRow = Prisma.todosGetPayload<{
 
 @Injectable()
 export class TodosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: RedisCacheService,
+  ) {}
 
   async list(userId: string, query: TodoQueryDto): Promise<TodoListResponse> {
-    return this.listWithResolvedFilter(userId, query);
+    return this.cache.rememberJson(
+      `todos:user:${userId}:list:${this.serializeQuery(query)}`,
+      45,
+      () => this.listWithResolvedFilter(userId, query),
+    );
   }
 
   async create(userId: string, dto: CreateTodoDto): Promise<TodoWithGroup> {
-    return this.createWithOverrides(userId, dto);
+    const todo = await this.createWithOverrides(userId, dto);
+    await this.invalidateTodoCaches(userId);
+    return todo;
   }
 
   async getById(userId: string, todoId: string): Promise<TodoWithGroup> {
-    const todo = await this.findOwnedTodoOrThrow(userId, todoId);
-    return this.toTodoWithGroup(todo);
+    return this.cache.rememberJson(`todos:user:${userId}:item:${todoId}`, 45, async () => {
+      const todo = await this.findOwnedTodoOrThrow(userId, todoId);
+      return this.toTodoWithGroup(todo);
+    });
   }
 
   async update(
@@ -141,6 +153,7 @@ export class TodosService {
       },
     });
 
+    await this.invalidateTodoCaches(userId);
     return this.toTodoWithGroup(todo);
   }
 
@@ -154,6 +167,7 @@ export class TodosService {
       },
     });
 
+    await this.invalidateTodoCaches(userId);
     return { message: 'Todo deleted successfully' };
   }
 
@@ -173,6 +187,7 @@ export class TodosService {
       },
     });
 
+    await this.invalidateTodoCaches(userId);
     return this.toTodoWithGroup(todo);
   }
 
@@ -192,6 +207,7 @@ export class TodosService {
       },
     });
 
+    await this.invalidateTodoCaches(userId);
     return this.toTodoWithGroup(todo);
   }
 
@@ -200,7 +216,7 @@ export class TodosService {
     groupId: string,
     query: TodoQueryDto = {},
   ): Promise<TodoListResponse> {
-    return this.listWithResolvedFilter(userId, {
+    return this.list(userId, {
       ...query,
       groupId,
     });
@@ -224,13 +240,16 @@ export class TodosService {
       throw new BadRequestException('note_id does not match group note_id');
     }
 
-    return this.createWithOverrides(userId, {
+    const todo = await this.createWithOverrides(userId, {
       ...dto,
       topic_id: dto.topic_id ?? group.topic_id ?? undefined,
       note_id: dto.note_id ?? group.note_id ?? undefined,
       group_id: group.id,
       groupId: group.id,
     });
+
+    await this.invalidateTodoCaches(userId);
+    return todo;
   }
 
   async findOwnedGroupOrThrow(
@@ -660,5 +679,26 @@ export class TodosService {
             }
           : null,
     };
+  }
+
+  private serializeQuery(query: TodoQueryDto) {
+    return JSON.stringify({
+      due: query.due ?? null,
+      groupId: query.groupId ?? null,
+      limit: query.limit ?? 20,
+      noteId: query.noteId ?? null,
+      page: query.page ?? 1,
+      priority: query.priority ?? null,
+      search: query.search?.trim() || null,
+      status: query.status ?? null,
+      topicId: query.topicId ?? null,
+    });
+  }
+
+  private async invalidateTodoCaches(userId: string) {
+    await Promise.all([
+      this.cache.invalidateByPrefix(`todos:user:${userId}:`),
+      this.cache.invalidateByPrefix(`todo-groups:user:${userId}:`),
+    ]);
   }
 }

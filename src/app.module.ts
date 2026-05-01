@@ -12,10 +12,12 @@ import { NotesModule } from './modules/notes/notes.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { TodosModule } from './modules/todos/todos.module';
 import { TodoGroupsModule } from './modules/todo-groups/todo-groups.module';
+import { RedisModule } from './infrastructure/redis/redis.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    RedisModule,
     AuthModule,
     PrismaModule,
     UsersModule,

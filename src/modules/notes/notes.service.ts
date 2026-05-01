@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
+import { RedisCacheService } from '../../infrastructure/redis/redis-cache.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
@@ -16,6 +17,7 @@ import { NotificationsEventsService } from '../notifications/notifications.event
 export class NotesService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly cache: RedisCacheService,
     private readonly notificationsEvents: NotificationsEventsService,
   ) {}
 
@@ -36,7 +38,7 @@ export class NotesService {
       throw new BadRequestException('Topic not found');
     }
 
-    return this.prisma.notes.create({
+    const note = await this.prisma.notes.create({
       data: {
         topic_id: dto.topic_id,
         title: dto.title,
@@ -44,24 +46,33 @@ export class NotesService {
         is_pinned: dto.is_pinned ?? false,
       },
     });
+
+    await this.invalidateUserNoteCaches(userId);
+    return note;
   }
 
   /**
    * GET NOTES BY TOPIC (INCLUDE SUBTREE)
    */
   async getByTopic(userId: string, topicId: string): Promise<Note[]> {
-    const topicIds = await this.collectTopicIds(userId, topicId);
+    return this.cache.rememberJson(
+      `notes:user:${userId}:topic:${topicId}`,
+      60,
+      async () => {
+        const topicIds = await this.collectTopicIds(userId, topicId);
 
-    return this.prisma.notes.findMany({
-      where: {
-        topic_id: { in: topicIds },
-        deleted_at: null,
-        topics: {
-          user_id: userId,
-        },
+        return this.prisma.notes.findMany({
+          where: {
+            topic_id: { in: topicIds },
+            deleted_at: null,
+            topics: {
+              user_id: userId,
+            },
+          },
+          orderBy: [{ is_pinned: 'desc' }, { updated_at: 'desc' }],
+        });
       },
-      orderBy: [{ is_pinned: 'desc' }, { updated_at: 'desc' }],
-    });
+    );
   }
 
   /**
@@ -70,29 +81,34 @@ export class NotesService {
   async getById(userId: string, noteId: string): Promise<Note> {
     await this.assertNoteAccess(userId, noteId);
 
-    return this.prisma.notes.update({
+    const note = await this.prisma.notes.update({
       where: { id: noteId },
       data: { last_viewed_at: new Date() },
     });
+
+    await this.invalidateUserNoteCaches(userId);
+    return note;
   }
 
   /**
    * GET RECENTLY VIEWED NOTES
    */
   async getRecentViewed(userId: string, limit = 5): Promise<Note[]> {
-    return this.prisma.notes.findMany({
-      where: {
-        deleted_at: null,
-        last_viewed_at: { not: null },
-        topics: {
-          user_id: userId,
+    return this.cache.rememberJson(`notes:user:${userId}:recent:${limit}`, 30, () =>
+      this.prisma.notes.findMany({
+        where: {
+          deleted_at: null,
+          last_viewed_at: { not: null },
+          topics: {
+            user_id: userId,
+          },
         },
-      },
-      orderBy: {
-        last_viewed_at: 'desc',
-      },
-      take: limit,
-    });
+        orderBy: {
+          last_viewed_at: 'desc',
+        },
+        take: limit,
+      }),
+    );
   }
 
   /**
@@ -109,7 +125,7 @@ export class NotesService {
       throw new BadRequestException('Permission denied');
     }
 
-    return this.prisma.notes.update({
+    const note = await this.prisma.notes.update({
       where: { id: noteId },
       data: {
         title: dto.title,
@@ -117,6 +133,9 @@ export class NotesService {
         is_pinned: dto.is_pinned,
       },
     });
+
+    await this.invalidateUserNoteCaches(userId);
+    return note;
   }
 
   /**
@@ -127,7 +146,7 @@ export class NotesService {
     noteId: string,
     isPinned: boolean,
   ): Promise<Note> {
-    const note = await this.prisma.notes.findFirst({
+    const existingNote = await this.prisma.notes.findFirst({
       where: {
         id: noteId,
         deleted_at: null,
@@ -138,23 +157,26 @@ export class NotesService {
       select: { id: true },
     });
 
-    if (!note) {
+    if (!existingNote) {
       throw new BadRequestException('Note not found');
     }
 
-    return this.prisma.notes.update({
+    const note = await this.prisma.notes.update({
       where: { id: noteId },
       data: {
         is_pinned: isPinned,
       },
     });
+
+    await this.invalidateUserNoteCaches(userId);
+    return note;
   }
 
   /**
    * SOFT DELETE NOTE
    */
   async softDelete(userId: string, noteId: string) {
-    return this.prisma.notes.updateMany({
+    const result = await this.prisma.notes.updateMany({
       where: {
         id: noteId,
         deleted_at: null,
@@ -166,6 +188,9 @@ export class NotesService {
         deleted_at: new Date(),
       },
     });
+
+    await this.invalidateUserNoteCaches(userId);
+    return result;
   }
 
   /**
@@ -194,10 +219,13 @@ export class NotesService {
     });
 
     if (existingShare) {
-      return this.prisma.note_shares.update({
+      const share = await this.prisma.note_shares.update({
         where: { id: existingShare.id },
         data: { permission: dto.permission },
       });
+
+      await this.invalidateShareCaches(userId, noteId, shareUser.id);
+      return share;
     }
 
     const share = await this.prisma.note_shares.create({
@@ -216,6 +244,7 @@ export class NotesService {
       sharedAt: new Date().toISOString(),
     });
 
+    await this.invalidateShareCaches(userId, noteId, shareUser.id);
     return share;
   }
 
@@ -244,12 +273,15 @@ export class NotesService {
       throw new BadRequestException('Share not found');
     }
 
-    return this.prisma.note_shares.update({
+    const share = await this.prisma.note_shares.update({
       where: { id: existingShare.id },
       data: {
         permission: dto.permission,
       },
     });
+
+    await this.invalidateShareCaches(userId, noteId, shareUserId);
+    return share;
   }
 
   /**
@@ -258,12 +290,15 @@ export class NotesService {
   async removeShare(userId: string, noteId: string, shareUserId: string) {
     await this.assertNoteOwner(userId, noteId);
 
-    return this.prisma.note_shares.deleteMany({
+    const result = await this.prisma.note_shares.deleteMany({
       where: {
         note_id: noteId,
         user_id: shareUserId,
       },
     });
+
+    await this.invalidateShareCaches(userId, noteId, shareUserId);
+    return result;
   }
 
   /**
@@ -272,54 +307,61 @@ export class NotesService {
   async listShares(userId: string, noteId: string) {
     await this.assertNoteOwner(userId, noteId);
 
-    return this.prisma.note_shares.findMany({
-      where: {
-        note_id: noteId,
-      },
-      select: {
-        user_id: true,
-        permission: true,
-        created_at: true,
-        users: {
-          select: {
-            email: true,
-            fullname: true,
+    return this.cache.rememberJson(
+      `notes:user:${userId}:note:${noteId}:shares`,
+      60,
+      () =>
+        this.prisma.note_shares.findMany({
+          where: {
+            note_id: noteId,
           },
-        },
-      },
-      orderBy: { created_at: 'asc' },
-    });
+          select: {
+            user_id: true,
+            permission: true,
+            created_at: true,
+            users: {
+              select: {
+                email: true,
+                fullname: true,
+              },
+            },
+          },
+          orderBy: { created_at: 'asc' },
+        }),
+    );
   }
 
   /**
    * LIST NOTES SHARED WITH CURRENT USER
    */
   async getSharedWithMe(userId: string): Promise<SharedNote[]> {
-    const shares = await this.prisma.note_shares.findMany({
-      where: {
-        user_id: userId,
-        notes: {
-          deleted_at: null,
+    return this.cache.rememberJson(`notes:user:${userId}:shared`, 60, async () => {
+      const shares = await this.prisma.note_shares.findMany({
+        where: {
+          user_id: userId,
+          notes: {
+            deleted_at: null,
+          },
         },
-      },
-      select: {
-        permission: true,
-        notes: {
-          include: {
-            topics: {
-              select: { user_id: true },
+        select: {
+          permission: true,
+          notes: {
+            include: {
+              topics: {
+                select: { user_id: true },
+              },
             },
           },
         },
-      },
-      orderBy: { created_at: 'desc' },
-    });
+        orderBy: { created_at: 'desc' },
+      });
 
-    return shares.map((share) => ({
-      ...this.stripNoteRelations(share.notes),
-      permission: this.normalizePermission(share.permission),
-      owner_id: share.notes.topics.user_id,
-    }));
+      return shares.map((share) => ({
+        ...this.stripNoteRelations(share.notes),
+        permission: this.normalizePermission(share.permission),
+        owner_id: share.notes.topics.user_id,
+      }));
+    });
   }
 
   /**
@@ -452,5 +494,22 @@ export class NotesService {
   }) {
     const { topics, note_shares, ...rest } = note as Record<string, unknown>;
     return rest as Note;
+  }
+
+  private async invalidateUserNoteCaches(userId: string) {
+    await this.cache.invalidateByPrefix(`notes:user:${userId}:`);
+  }
+
+  private async invalidateShareCaches(
+    ownerUserId: string,
+    noteId: string,
+    recipientUserId: string,
+  ) {
+    await Promise.all([
+      this.invalidateUserNoteCaches(ownerUserId),
+      this.cache.del(`notes:user:${ownerUserId}:note:${noteId}:shares`),
+      this.cache.invalidateByPrefix(`notes:user:${recipientUserId}:`),
+      this.cache.invalidateByPrefix(`notifications:user:${recipientUserId}:`),
+    ]);
   }
 }
