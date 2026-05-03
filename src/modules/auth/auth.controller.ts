@@ -2,10 +2,12 @@ import {
   Body,
   Controller,
   Post,
+  Get,
   Res,
   Req,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Response, Request } from 'express';
@@ -13,6 +15,9 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { Public } from 'src/common/decorators/public.decorator';
+import { GoogleOauthGuard } from './google-oauth.guard';
+import { CurrentUser } from './current-user.decorator';
+import type { CurrentUserData } from './current-user.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -43,9 +48,10 @@ export class AuthController {
 
     res.cookie('refresh_token', refreshToken, {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === 'production' || true,
       sameSite: 'none',
       maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/api/auth/refresh',
     });
 
     return { message: 'Login successful', access_token: accessToken, user };
@@ -64,14 +70,19 @@ export class AuthController {
   @Post('logout')
   async logout(
     @Req() req: Request,
+    @CurrentUser() user: CurrentUserData,
     @Res({ passthrough: true }) res: Response,
   ) {
     const refreshToken = req.cookies['refresh_token'] as string | undefined;
     const accessToken = this.extractBearerToken(req);
 
-    await this.authService.logout(accessToken ?? null, refreshToken ?? null);
+    await this.authService.logout(
+      accessToken ?? null,
+      refreshToken ?? null,
+      user.userId,
+    );
 
-    res.clearCookie('refresh_token');
+    res.clearCookie('refresh_token', { path: '/api/auth/refresh' });
 
     return { message: 'Logged out' };
   }
@@ -83,5 +94,39 @@ export class AuthController {
     }
 
     return authorization.slice(7).trim() || null;
+  }
+
+  @Public()
+  @Get('google')
+  @UseGuards(GoogleOauthGuard)
+  async googleAuth() {
+    // initiates the Google OAuth2 login flow
+  }
+
+  @Public()
+  @Get('google/callback')
+  @UseGuards(GoogleOauthGuard)
+  async googleAuthCallback(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { accessToken, refreshToken, user } =
+      await this.authService.googleLogin(req['user']);
+
+    res.cookie('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production' || true,
+      sameSite: 'none',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/api/auth/refresh',
+    });
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    res.redirect(`${frontendUrl}/auth/callback?access_token=${accessToken}`);
+  }
+
+  @Get('me')
+  getProfile(@Req() req: Request) {
+    return { user: req['user'] };
   }
 }

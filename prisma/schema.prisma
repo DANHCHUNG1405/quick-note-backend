@@ -46,16 +46,21 @@ model topics {
 }
 
 model users {
-  id            String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  email         String          @unique @db.VarChar(255)
-  password_hash String
-  created_at    DateTime?       @default(now()) @db.Timestamp(6)
-  fullname      String?         @db.VarChar(50)
-  note_shares   note_shares[]
-  notifications notifications[]
-  todo_groups   todo_groups[]
-  todos         todos[]
-  topics        topics[]
+  id                 String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  email              String          @unique @db.VarChar(255)
+  password_hash      String?
+  fullname           String?         @db.VarChar(50)
+  avatar             String?         @db.VarChar(255)
+  google_id          String?         @unique @db.VarChar(255)
+  provider           String?         @default("LOCAL") @db.VarChar(50)
+  refresh_token_hash String?
+  created_at         DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at         DateTime?       @default(now()) @db.Timestamp(6)
+  note_shares        note_shares[]
+  notifications      notifications[]
+  todo_groups        todo_groups[]
+  todos              todos[]
+  topics             topics[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
