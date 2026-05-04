@@ -15,3 +15,21 @@ export type NotificationSocketPayload = {
   note_id: string;
   shared_by_user_id: string;
 };
+
+export type NoteViewerSocketPayload = {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  color?: string;
+};
+
+export type NoteViewersUpdateSocketPayload = {
+  noteId: string;
+  viewers: NoteViewerSocketPayload[];
+};
+
+export type NotePresenceErrorSocketPayload = {
+  event: 'note:join' | 'note:leave';
+  noteId?: string;
+  message: string;
+};

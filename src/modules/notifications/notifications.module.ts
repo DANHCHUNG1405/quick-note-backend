@@ -9,6 +9,7 @@ import { NotificationsEventsService } from './notifications.events.service';
 import { NotificationsEmailService } from './notifications.email.service';
 import { NOTIFICATIONS_QUEUE } from './notifications.constants';
 import { NotificationsProcessor } from './notifications.processor';
+import { NotePresenceService } from './note-presence.service';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { NotificationsProcessor } from './notifications.processor';
     NotificationsEventsService,
     NotificationsProcessor,
     NotificationsEmailService,
+    NotePresenceService,
   ],
   exports: [NotificationsEventsService],
 })

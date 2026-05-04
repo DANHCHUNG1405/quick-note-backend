@@ -23,6 +23,7 @@ Dự án được xây dựng dựa trên hệ sinh thái **Node.js** cùng vớ
 
 ### Real-time & WebSockets
 - **[Socket.IO](https://socket.io/)**: Thư viện cho phép giao tiếp hai chiều, thời gian thực và dựa trên sự kiện giữa trình duyệt (frontend) và máy chủ (backend).
+- **[Note Presence Viewers](./docs/note-presence-socket.md)**: Tai lieu tich hop socket de hien thi danh sach user dang xem cung mot note.
 
 ### Background Jobs & Caching
 - **[BullMQ](https://docs.bullmq.io/)**: Hệ thống Message Queue mạnh mẽ, nhanh và đáng tin cậy dành cho NodeJS dựa trên Redis. Dùng để xử lý các tác vụ nền (background jobs).
