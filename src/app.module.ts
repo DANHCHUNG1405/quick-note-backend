@@ -14,6 +14,7 @@ import { TodosModule } from './modules/todos/todos.module';
 import { TodoGroupsModule } from './modules/todo-groups/todo-groups.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
 import { RateLimitModule } from './common/rate-limit/rate-limit.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { RateLimitModule } from './common/rate-limit/rate-limit.module';
     NotificationsModule,
     TodosModule,
     TodoGroupsModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [
