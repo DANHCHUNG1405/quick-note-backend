@@ -10,7 +10,6 @@ export type DashboardStats = {
     todos: number;
     pendingTodos: number;
     completedTodos: number;
-    overdueTodos: number;
     unreadNotifications: number;
   };
   notes: {
@@ -26,10 +25,6 @@ export type DashboardStats = {
     pending: number;
     completed: number;
     cancelled: number;
-    overdue: number;
-    dueToday: number;
-    upcoming: number;
-    withoutDueDate: number;
     completionRate: number;
     byPriority: {
       LOW: number;
@@ -40,8 +35,9 @@ export type DashboardStats = {
   };
   todoGroups: {
     total: number;
+    pending: number;
+    completed: number;
     custom: number;
-    note: number;
     daily: number;
   };
   notifications: {
@@ -50,8 +46,7 @@ export type DashboardStats = {
   };
   activity: {
     recentNotes: DashboardRecentNote[];
-    upcomingTodos: DashboardTodoItem[];
-    overdueTodos: DashboardTodoItem[];
+    recentTodos: DashboardTodoItem[];
   };
 };
 
@@ -70,7 +65,7 @@ export type DashboardTodoItem = {
   title: string;
   status: string;
   priority: string;
-  dueAt: string | null;
   groupId: string | null;
   groupName: string | null;
+  groupDate: string | null;
 };

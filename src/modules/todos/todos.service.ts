@@ -63,7 +63,10 @@ export class TodosService {
   }
 
   async create(userId: string, dto: CreateTodoDto): Promise<TodoWithGroup> {
-    const todo = await this.createWithOverrides(userId, dto);
+    if (!dto.group_id) {
+      throw new BadRequestException('group_id is required');
+    }
+    const todo = await this.createInternal(userId, dto.group_id, dto);
     await this.invalidateTodoCaches(userId);
     return todo;
   }
@@ -75,20 +78,13 @@ export class TodosService {
     });
   }
 
-  async update(
-    userId: string,
-    todoId: string,
-    dto: UpdateTodoDto,
-  ): Promise<TodoWithGroup> {
+  async update(userId: string, todoId: string, dto: UpdateTodoDto): Promise<TodoWithGroup> {
     const existing = await this.findOwnedTodoOrThrow(userId, todoId);
+    const oldGroupId = existing.group_id;
 
-    const resolvedGroupId =
-      this.extractGroupId(dto) === undefined
-        ? existing.group_id
-        : (this.extractGroupId(dto) ?? null);
-
-    if (resolvedGroupId) {
-      await this.findOwnedGroupOrThrow(userId, resolvedGroupId);
+    const newGroupId = dto.group_id !== undefined ? dto.group_id : oldGroupId;
+    if (dto.group_id !== undefined) {
+      await this.findOwnedGroupOrThrow(userId, dto.group_id);
     }
 
     const data: Prisma.todosUncheckedUpdateInput = {};
@@ -96,15 +92,8 @@ export class TodosService {
     if (dto.title !== undefined) data.title = dto.title.trim();
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.priority !== undefined) data.priority = dto.priority;
-    if (dto.due_at !== undefined) data.due_at = this.parseDateOrNull(dto.due_at);
     if (dto.order_index !== undefined) data.order_index = dto.order_index;
-
-    if (
-      this.extractGroupId(dto) !== undefined ||
-      existing.group_id !== resolvedGroupId
-    ) {
-      data.group_id = resolvedGroupId;
-    }
+    if (dto.group_id !== undefined) data.group_id = dto.group_id;
 
     if (dto.status !== undefined) {
       Object.assign(data, this.buildStatusData(dto.status, existing.completed_at ?? null));
@@ -116,24 +105,33 @@ export class TodosService {
       include: { todo_groups: { select: TODO_GROUP_SELECT } },
     });
 
+    const groupsToRecalculate = new Set<string>();
+    if (oldGroupId) groupsToRecalculate.add(oldGroupId);
+    if (newGroupId) groupsToRecalculate.add(newGroupId);
+    await Promise.all([...groupsToRecalculate].map((gid) => this.recalculateGroupStatus(gid)));
+
     await this.invalidateTodoCaches(userId);
     return this.toTodoWithGroup(todo);
   }
 
   async softDelete(userId: string, todoId: string) {
-    await this.findOwnedTodoOrThrow(userId, todoId);
+    const existing = await this.findOwnedTodoOrThrow(userId, todoId);
 
     await this.prisma.todos.update({
       where: { id: todoId },
       data: { deleted_at: new Date() },
     });
 
+    if (existing.group_id) {
+      await this.recalculateGroupStatus(existing.group_id);
+    }
+
     await this.invalidateTodoCaches(userId);
     return { message: 'Todo deleted successfully' };
   }
 
   async complete(userId: string, todoId: string): Promise<TodoWithGroup> {
-    await this.findOwnedTodoOrThrow(userId, todoId);
+    const existing = await this.findOwnedTodoOrThrow(userId, todoId);
 
     const todo = await this.prisma.todos.update({
       where: { id: todoId },
@@ -141,12 +139,16 @@ export class TodosService {
       include: { todo_groups: { select: TODO_GROUP_SELECT } },
     });
 
+    if (existing.group_id) {
+      await this.recalculateGroupStatus(existing.group_id);
+    }
+
     await this.invalidateTodoCaches(userId);
     return this.toTodoWithGroup(todo);
   }
 
   async uncomplete(userId: string, todoId: string): Promise<TodoWithGroup> {
-    await this.findOwnedTodoOrThrow(userId, todoId);
+    const existing = await this.findOwnedTodoOrThrow(userId, todoId);
 
     const todo = await this.prisma.todos.update({
       where: { id: todoId },
@@ -154,34 +156,20 @@ export class TodosService {
       include: { todo_groups: { select: TODO_GROUP_SELECT } },
     });
 
+    if (existing.group_id) {
+      await this.recalculateGroupStatus(existing.group_id);
+    }
+
     await this.invalidateTodoCaches(userId);
     return this.toTodoWithGroup(todo);
   }
 
-  async listByGroup(
-    userId: string,
-    groupId: string,
-    query: TodoQueryDto = {},
-  ): Promise<TodoListResponse> {
+  async listByGroup(userId: string, groupId: string, query: TodoQueryDto = {}): Promise<TodoListResponse> {
     return this.list(userId, { ...query, groupId });
   }
 
-  async createInGroup(
-    userId: string,
-    group: TodoGroupOwner,
-    dto: CreateTodoDto,
-  ): Promise<TodoWithGroup> {
-    const requestedGroupId = this.extractGroupId(dto);
-    if (requestedGroupId && requestedGroupId !== group.id) {
-      throw new BadRequestException('group_id does not match target group');
-    }
-
-    const todo = await this.createWithOverrides(userId, {
-      ...dto,
-      group_id: group.id,
-      groupId: group.id,
-    });
-
+  async createInGroup(userId: string, group: TodoGroupOwner, dto: CreateTodoDto): Promise<TodoWithGroup> {
+    const todo = await this.createInternal(userId, group.id, dto);
     await this.invalidateTodoCaches(userId);
     return todo;
   }
@@ -192,14 +180,11 @@ export class TodosService {
       select: { id: true, user_id: true, deleted_at: true },
     });
 
-    if (!group) {
-      throw new NotFoundException('Todo group not found');
-    }
-
+    if (!group) throw new NotFoundException('Todo group not found');
     return group;
   }
 
-  sortTodoItems<T extends { status: string; due_at: Date | null; order_index: number | null; created_at: Date | null }>(
+  sortTodoItems<T extends { status: string; order_index: number | null; created_at: Date | null }>(
     todos: T[],
   ): T[] {
     return [...todos].sort((a, b) => this.compareTodoOrder(a, b));
@@ -229,13 +214,12 @@ export class TodosService {
     };
   }
 
-  private async createWithOverrides(userId: string, dto: CreateTodoDto): Promise<TodoWithGroup> {
-    const groupId = this.extractGroupId(dto) ?? null;
-
-    if (groupId) {
-      await this.findOwnedGroupOrThrow(userId, groupId);
-    }
-
+  private async createInternal(
+    userId: string,
+    groupId: string,
+    dto: CreateTodoDto,
+  ): Promise<TodoWithGroup> {
+    await this.findOwnedGroupOrThrow(userId, groupId);
     const status = dto.status ?? 'PENDING';
 
     const todo = await this.prisma.todos.create({
@@ -245,13 +229,13 @@ export class TodosService {
         title: dto.title.trim(),
         description: dto.description ?? null,
         priority: dto.priority ?? 'NORMAL',
-        due_at: this.parseDateOrNull(dto.due_at),
         order_index: dto.order_index ?? 0,
         ...this.buildStatusData(status, null, true),
       },
       include: { todo_groups: { select: TODO_GROUP_SELECT } },
     });
 
+    await this.recalculateGroupStatus(groupId);
     return this.toTodoWithGroup(todo);
   }
 
@@ -272,51 +256,27 @@ export class TodosService {
       });
     }
 
-    const now = new Date();
-    const { startOfDay, endOfDay } = this.getCurrentDayRange(now);
-
-    if (query.due === 'today') {
-      conditions.push({ due_at: { gte: startOfDay, lte: endOfDay } });
-    }
-
-    if (query.due === 'upcoming') {
-      conditions.push({ due_at: { gt: endOfDay } });
-    }
-
-    if (query.due === 'overdue') {
-      conditions.push({ due_at: { lt: now } });
-      conditions.push({ status: { not: 'COMPLETED' } });
-    }
-
     return { AND: conditions };
   }
 
   private compareTodoOrder(
-    left: { status: string; due_at: Date | null; order_index: number | null; created_at: Date | null },
-    right: { status: string; due_at: Date | null; order_index: number | null; created_at: Date | null },
+    left: { status: string; order_index: number | null; created_at: Date | null },
+    right: { status: string; order_index: number | null; created_at: Date | null },
   ) {
     const statusDiff = this.getStatusRank(left.status) - this.getStatusRank(right.status);
     if (statusDiff !== 0) return statusDiff;
 
-    const dueDiff = this.compareNullableDates(left.due_at, right.due_at);
-    if (dueDiff !== 0) return dueDiff;
-
     const orderDiff = (left.order_index ?? 0) - (right.order_index ?? 0);
     if (orderDiff !== 0) return orderDiff;
 
-    return this.compareNullableDates(right.created_at ?? null, left.created_at ?? null);
+    const l = left.created_at?.getTime() ?? 0;
+    const r = right.created_at?.getTime() ?? 0;
+    return r - l;
   }
 
   private getStatusRank(status: string) {
     const ranks: Record<TodoStatus, number> = { PENDING: 0, COMPLETED: 1, CANCELLED: 2 };
     return ranks[status as TodoStatus] ?? 99;
-  }
-
-  private compareNullableDates(left: Date | null, right: Date | null) {
-    if (left && right) return left.getTime() - right.getTime();
-    if (left) return -1;
-    if (right) return 1;
-    return 0;
   }
 
   private async findOwnedTodoOrThrow(userId: string, todoId: string): Promise<TodoWithGroupRow> {
@@ -339,24 +299,20 @@ export class TodosService {
     return { status, completed_at: null };
   }
 
-  private parseDateOrNull(value: string | null | undefined) {
-    if (value === undefined) return undefined;
-    if (value === null) return null;
-    return new Date(value);
-  }
+  private async recalculateGroupStatus(groupId: string): Promise<void> {
+    const todos = await this.prisma.todos.findMany({
+      where: { group_id: groupId, deleted_at: null },
+      select: { status: true },
+    });
 
-  private getCurrentDayRange(now: Date) {
-    const startOfDay = new Date(now);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(now);
-    endOfDay.setHours(23, 59, 59, 999);
-    return { startOfDay, endOfDay };
-  }
+    const allDone =
+      todos.length > 0 &&
+      todos.every((t) => t.status === 'COMPLETED' || t.status === 'CANCELLED');
 
-  private extractGroupId(dto: CreateTodoDto | UpdateTodoDto) {
-    if ('group_id' in dto && dto.group_id !== undefined) return dto.group_id;
-    if ('groupId' in dto && dto.groupId !== undefined) return dto.groupId;
-    return undefined;
+    await this.prisma.todo_groups.update({
+      where: { id: groupId },
+      data: { status: allDone ? 'COMPLETED' : 'PENDING' },
+    });
   }
 
   toTodoWithGroup(todo: TodoWithGroupRow): TodoWithGroup {
@@ -377,7 +333,6 @@ export class TodosService {
 
   private serializeQuery(query: TodoQueryDto) {
     return JSON.stringify({
-      due: query.due ?? null,
       groupId: query.groupId ?? null,
       limit: query.limit ?? 20,
       page: query.page ?? 1,
@@ -391,6 +346,7 @@ export class TodosService {
     await Promise.all([
       this.cache.invalidateByPrefix(`todos:user:${userId}:`),
       this.cache.invalidateByPrefix(`todo-groups:user:${userId}:`),
+      this.cache.invalidateByPrefix(`roadmaps:user:${userId}:`),
     ]);
   }
 }

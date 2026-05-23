@@ -1,5 +1,4 @@
 import {
-  IsDateString,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -8,7 +7,6 @@ import {
   IsUUID,
   MaxLength,
   Min,
-  ValidateIf,
 } from 'class-validator';
 
 export const TODO_STATUSES = ['PENDING', 'COMPLETED', 'CANCELLED'] as const;
@@ -33,17 +31,8 @@ export class CreateTodoDto {
   priority?: (typeof TODO_PRIORITIES)[number];
 
   @IsOptional()
-  @IsDateString()
-  due_at?: string | null;
-
-  @IsOptional()
   @IsUUID()
-  group_id?: string | null;
-
-  @ValidateIf((o: CreateTodoDto) => o.group_id === undefined)
-  @IsOptional()
-  @IsUUID()
-  groupId?: string | null;
+  group_id?: string;
 
   @IsOptional()
   @IsInt()

@@ -10,8 +10,6 @@ import {
 } from 'class-validator';
 import { TODO_PRIORITIES, TODO_STATUSES } from './create-todo.dto';
 
-const TODO_DUE_FILTERS = ['today', 'upcoming', 'overdue'] as const;
-
 export class TodoQueryDto {
   @IsOptional()
   @IsIn(TODO_STATUSES)
@@ -24,10 +22,6 @@ export class TodoQueryDto {
   @IsOptional()
   @IsUUID()
   groupId?: string;
-
-  @IsOptional()
-  @IsIn(TODO_DUE_FILTERS)
-  due?: (typeof TODO_DUE_FILTERS)[number];
 
   @IsOptional()
   @IsString()
