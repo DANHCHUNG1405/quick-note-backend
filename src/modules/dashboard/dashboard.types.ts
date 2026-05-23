@@ -71,10 +71,6 @@ export type DashboardTodoItem = {
   status: string;
   priority: string;
   dueAt: string | null;
-  topicId: string | null;
-  topicName: string | null;
-  noteId: string | null;
-  noteTitle: string | null;
   groupId: string | null;
   groupName: string | null;
 };

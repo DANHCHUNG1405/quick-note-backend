@@ -330,19 +330,7 @@ export class DashboardService {
       status: true,
       priority: true,
       due_at: true,
-      topic_id: true,
-      note_id: true,
       group_id: true,
-      topics: {
-        select: {
-          name: true,
-        },
-      },
-      notes: {
-        select: {
-          title: true,
-        },
-      },
       todo_groups: {
         select: {
           name: true,
@@ -357,11 +345,7 @@ export class DashboardService {
     status: string;
     priority: string;
     due_at: Date | null;
-    topic_id: string | null;
-    note_id: string | null;
     group_id: string | null;
-    topics: { name: string } | null;
-    notes: { title: string } | null;
     todo_groups: { name: string } | null;
   }): DashboardTodoItem {
     return {
@@ -370,10 +354,6 @@ export class DashboardService {
       status: todo.status,
       priority: todo.priority,
       dueAt: todo.due_at?.toISOString() ?? null,
-      topicId: todo.topic_id,
-      topicName: todo.topics?.name ?? null,
-      noteId: todo.note_id,
-      noteTitle: todo.notes?.title ?? null,
       groupId: todo.group_id,
       groupName: todo.todo_groups?.name ?? null,
     };

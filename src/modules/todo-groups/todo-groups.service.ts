@@ -14,9 +14,7 @@ import { TodoGroupQueryDto } from './dto/todo-group-query.dto';
 import { UpdateTodoGroupDto } from './dto/update-todo-group.dto';
 
 type TodoGroupWithCount = TodoGroupModel & {
-  _count: {
-    todos: number;
-  };
+  _count: { todos: number };
 };
 
 type TodoGroupListResponse = {
@@ -60,37 +58,24 @@ export class TodoGroupsService {
               where: {
                 user_id: userId,
                 deleted_at: null,
-                group_id: {
-                  in: groups.map((group) => group.id),
-                },
+                group_id: { in: groups.map((g) => g.id) },
               },
-              _count: {
-                _all: true,
-              },
+              _count: { _all: true },
             })
           : [];
 
-        const countMap = new Map(
-          counts.map((item) => [item.group_id, item._count._all]),
-        );
+        const countMap = new Map(counts.map((c) => [c.group_id, c._count._all]));
 
         const total = groups.length;
         const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
         const start = (page - 1) * limit;
 
         return {
-          items: groups.slice(start, start + limit).map((group) => ({
-            ...group,
-            _count: {
-              todos: countMap.get(group.id) ?? 0,
-            },
+          items: groups.slice(start, start + limit).map((g) => ({
+            ...g,
+            _count: { todos: countMap.get(g.id) ?? 0 },
           })),
-          meta: {
-            page,
-            limit,
-            total,
-            totalPages,
-          },
+          meta: { page, limit, total, totalPages },
         };
       },
     );
@@ -99,8 +84,7 @@ export class TodoGroupsService {
   async create(userId: string, dto: CreateTodoGroupDto): Promise<TodoGroupModel> {
     const resolved = await this.resolveGroupRelations(
       userId,
-      dto.topic_id ?? null,
-      dto.note_id ?? null,
+      dto.roadmap_id ?? null,
       dto.group_type ?? 'CUSTOM',
       dto.group_date ?? null,
     );
@@ -108,8 +92,7 @@ export class TodoGroupsService {
     const group = await this.prisma.todo_groups.create({
       data: {
         user_id: userId,
-        topic_id: resolved.topicId,
-        note_id: resolved.noteId,
+        roadmap_id: resolved.roadmapId,
         name: dto.name.trim(),
         description: dto.description ?? null,
         group_type: resolved.groupType,
@@ -129,20 +112,10 @@ export class TodoGroupsService {
       async () => {
         const group = await this.findOwnedGroupOrThrow(userId, groupId);
         const todos = await this.prisma.todos.findMany({
-          where: {
-            user_id: userId,
-            group_id: groupId,
-            deleted_at: null,
-          },
+          where: { user_id: userId, group_id: groupId, deleted_at: null },
           include: {
             todo_groups: {
-              select: {
-                id: true,
-                name: true,
-                group_type: true,
-                group_date: true,
-                deleted_at: true,
-              },
+              select: { id: true, name: true, group_type: true, group_date: true, deleted_at: true },
             },
           },
         });
@@ -151,7 +124,7 @@ export class TodoGroupsService {
           ...group,
           todos: this.todosService
             .sortTodoItems(todos)
-            .map((todo) => this.todosService.toTodoWithGroup(todo)),
+            .map((t) => this.todosService.toTodoWithGroup(t)),
         };
       },
     );
@@ -163,10 +136,10 @@ export class TodoGroupsService {
     dto: UpdateTodoGroupDto,
   ): Promise<TodoGroupModel> {
     const existing = await this.findOwnedGroupOrThrow(userId, groupId);
+
     const resolved = await this.resolveGroupRelations(
       userId,
-      dto.topic_id === undefined ? existing.topic_id : (dto.topic_id ?? null),
-      dto.note_id === undefined ? existing.note_id : (dto.note_id ?? null),
+      dto.roadmap_id === undefined ? existing.roadmap_id : (dto.roadmap_id ?? null),
       dto.group_type ?? existing.group_type,
       dto.group_date === undefined
         ? this.formatDateOnly(existing.group_date)
@@ -175,31 +148,19 @@ export class TodoGroupsService {
 
     const data: Prisma.todo_groupsUncheckedUpdateInput = {};
 
-    if (dto.name !== undefined) {
-      data.name = dto.name.trim();
-    }
-
-    if (dto.description !== undefined) {
-      data.description = dto.description;
-    }
-
-    if (dto.order_index !== undefined) {
-      data.order_index = dto.order_index;
-    }
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    if (dto.description !== undefined) data.description = dto.description;
+    if (dto.order_index !== undefined) data.order_index = dto.order_index;
 
     if (
-      dto.topic_id !== undefined ||
-      dto.note_id !== undefined ||
+      dto.roadmap_id !== undefined ||
       dto.group_type !== undefined ||
       dto.group_date !== undefined ||
-      existing.topic_id !== resolved.topicId ||
-      existing.note_id !== resolved.noteId ||
+      existing.roadmap_id !== resolved.roadmapId ||
       existing.group_type !== resolved.groupType ||
-      this.formatDateOnly(existing.group_date) !==
-        this.formatDateOnly(resolved.groupDate)
+      this.formatDateOnly(existing.group_date) !== this.formatDateOnly(resolved.groupDate)
     ) {
-      data.topic_id = resolved.topicId;
-      data.note_id = resolved.noteId;
+      data.roadmap_id = resolved.roadmapId;
       data.group_type = resolved.groupType;
       data.group_date = resolved.groupDate;
     }
@@ -218,20 +179,12 @@ export class TodoGroupsService {
 
     await this.prisma.$transaction([
       this.prisma.todos.updateMany({
-        where: {
-          user_id: userId,
-          group_id: groupId,
-          deleted_at: null,
-        },
-        data: {
-          group_id: null,
-        },
+        where: { user_id: userId, group_id: groupId, deleted_at: null },
+        data: { group_id: null },
       }),
       this.prisma.todo_groups.update({
         where: { id: groupId },
-        data: {
-          deleted_at: new Date(),
-        },
+        data: { deleted_at: new Date() },
       }),
     ]);
 
@@ -255,81 +208,41 @@ export class TodoGroupsService {
     return todo;
   }
 
-  private buildListWhere(
-    userId: string,
-    query: TodoGroupQueryDto,
-  ): Prisma.todo_groupsWhereInput {
-    const conditions: Prisma.todo_groupsWhereInput[] = [
-      {
-        user_id: userId,
-        deleted_at: null,
-      },
-    ];
+  private buildListWhere(userId: string, query: TodoGroupQueryDto): Prisma.todo_groupsWhereInput {
+    const conditions: Prisma.todo_groupsWhereInput[] = [{ user_id: userId, deleted_at: null }];
 
-    if (query.groupType) {
-      conditions.push({ group_type: query.groupType });
-    }
-
-    if (query.topicId) {
-      conditions.push({ topic_id: query.topicId });
-    }
-
-    if (query.noteId) {
-      conditions.push({ note_id: query.noteId });
-    }
+    if (query.groupType) conditions.push({ group_type: query.groupType });
+    if (query.roadmapId) conditions.push({ roadmap_id: query.roadmapId });
 
     if (query.groupDate) {
       conditions.push({ group_date: this.parseDateOnly(query.groupDate) });
     }
 
-    const trimmedSearch = query.search?.trim();
-    if (trimmedSearch) {
+    const trimmed = query.search?.trim();
+    if (trimmed) {
       conditions.push({
         OR: [
-          {
-            name: {
-              contains: trimmedSearch,
-              mode: 'insensitive',
-            },
-          },
-          {
-            description: {
-              contains: trimmedSearch,
-              mode: 'insensitive',
-            },
-          },
+          { name: { contains: trimmed, mode: 'insensitive' } },
+          { description: { contains: trimmed, mode: 'insensitive' } },
         ],
       });
     }
 
-    return {
-      AND: conditions,
-    };
+    return { AND: conditions };
   }
 
-  private async findOwnedGroupOrThrow(
-    userId: string,
-    groupId: string,
-  ): Promise<TodoGroupModel> {
+  private async findOwnedGroupOrThrow(userId: string, groupId: string): Promise<TodoGroupModel> {
     const group = await this.prisma.todo_groups.findFirst({
-      where: {
-        id: groupId,
-        user_id: userId,
-        deleted_at: null,
-      },
+      where: { id: groupId, user_id: userId, deleted_at: null },
     });
 
-    if (!group) {
-      throw new NotFoundException('Todo group not found');
-    }
-
+    if (!group) throw new NotFoundException('Todo group not found');
     return group;
   }
 
   private async resolveGroupRelations(
     userId: string,
-    topicId: string | null,
-    noteId: string | null,
+    roadmapId: string | null,
     groupType: string,
     groupDate: string | null,
   ) {
@@ -337,58 +250,13 @@ export class TodoGroupsService {
       throw new BadRequestException('Invalid group_type');
     }
 
-    let resolvedTopicId = topicId;
-    let resolvedNoteId = noteId;
-
-    if (resolvedTopicId) {
-      const topic = await this.prisma.topics.findFirst({
-        where: {
-          id: resolvedTopicId,
-          user_id: userId,
-          deleted_at: null,
-        },
+    if (roadmapId) {
+      const roadmap = await this.prisma.roadmaps.findFirst({
+        where: { id: roadmapId, user_id: userId, deleted_at: null },
         select: { id: true },
       });
 
-      if (!topic) {
-        throw new BadRequestException('Topic not found');
-      }
-    }
-
-    if (resolvedNoteId) {
-      const note = await this.prisma.notes.findFirst({
-        where: {
-          id: resolvedNoteId,
-          deleted_at: null,
-          topics: {
-            user_id: userId,
-            deleted_at: null,
-          },
-        },
-        select: {
-          id: true,
-          topic_id: true,
-        },
-      });
-
-      if (!note) {
-        throw new BadRequestException('Note not found');
-      }
-
-      if (resolvedTopicId && resolvedTopicId !== note.topic_id) {
-        throw new BadRequestException('note_id does not belong to topic_id');
-      }
-
-      resolvedTopicId = note.topic_id;
-      resolvedNoteId = note.id;
-    }
-
-    if (groupType === 'NOTE' && !resolvedNoteId) {
-      throw new BadRequestException('note_id is required for NOTE group');
-    }
-
-    if (groupType === 'TOPIC' && !resolvedTopicId) {
-      throw new BadRequestException('topic_id is required for TOPIC group');
+      if (!roadmap) throw new BadRequestException('Roadmap not found');
     }
 
     if (groupType === 'DAILY' && !groupDate) {
@@ -397,12 +265,7 @@ export class TodoGroupsService {
 
     const parsedGroupDate = groupDate ? this.parseDateOnly(groupDate) : null;
 
-    return {
-      topicId: resolvedTopicId,
-      noteId: resolvedNoteId,
-      groupType,
-      groupDate: parsedGroupDate,
-    };
+    return { roadmapId, groupType, groupDate: parsedGroupDate };
   }
 
   private parseDateOnly(value: string) {
@@ -421,10 +284,7 @@ export class TodoGroupsService {
   }
 
   private formatDateOnly(value: Date | null) {
-    if (!value) {
-      return null;
-    }
-
+    if (!value) return null;
     return value.toISOString().slice(0, 10);
   }
 
@@ -433,10 +293,9 @@ export class TodoGroupsService {
       groupDate: query.groupDate ?? null,
       groupType: query.groupType ?? null,
       limit: query.limit ?? 20,
-      noteId: query.noteId ?? null,
       page: query.page ?? 1,
+      roadmapId: query.roadmapId ?? null,
       search: query.search?.trim() || null,
-      topicId: query.topicId ?? null,
     });
   }
 
@@ -444,6 +303,7 @@ export class TodoGroupsService {
     await Promise.all([
       this.cache.invalidateByPrefix(`todo-groups:user:${userId}:`),
       this.cache.invalidateByPrefix(`todos:user:${userId}:`),
+      this.cache.invalidateByPrefix(`roadmaps:user:${userId}:`),
     ]);
   }
 }

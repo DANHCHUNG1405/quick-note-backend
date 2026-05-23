@@ -1,5 +1,4 @@
 import {
-  ValidateIf,
   IsDateString,
   IsIn,
   IsInt,
@@ -9,6 +8,7 @@ import {
   IsUUID,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export const TODO_STATUSES = ['PENDING', 'COMPLETED', 'CANCELLED'] as const;
@@ -35,14 +35,6 @@ export class CreateTodoDto {
   @IsOptional()
   @IsDateString()
   due_at?: string | null;
-
-  @IsOptional()
-  @IsUUID()
-  topic_id?: string | null;
-
-  @IsOptional()
-  @IsUUID()
-  note_id?: string | null;
 
   @IsOptional()
   @IsUUID()

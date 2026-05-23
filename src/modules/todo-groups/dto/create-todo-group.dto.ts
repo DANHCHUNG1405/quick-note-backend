@@ -10,7 +10,7 @@ import {
   Min,
 } from 'class-validator';
 
-export const TODO_GROUP_TYPES = ['CUSTOM', 'NOTE', 'DAILY', 'TOPIC'] as const;
+export const TODO_GROUP_TYPES = ['CUSTOM', 'DAILY'] as const;
 
 export class CreateTodoGroupDto {
   @IsString()
@@ -32,11 +32,7 @@ export class CreateTodoGroupDto {
 
   @IsOptional()
   @IsUUID()
-  topic_id?: string | null;
-
-  @IsOptional()
-  @IsUUID()
-  note_id?: string | null;
+  roadmap_id?: string | null;
 
   @IsOptional()
   @IsInt()

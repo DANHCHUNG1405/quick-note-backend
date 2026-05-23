@@ -12,6 +12,7 @@ import { NotesModule } from './modules/notes/notes.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { TodosModule } from './modules/todos/todos.module';
 import { TodoGroupsModule } from './modules/todo-groups/todo-groups.module';
+import { RoadmapsModule } from './modules/roadmaps/roadmaps.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
 import { RateLimitModule } from './common/rate-limit/rate-limit.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
@@ -29,6 +30,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     NotificationsModule,
     TodosModule,
     TodoGroupsModule,
+    RoadmapsModule,
     DashboardModule,
   ],
   controllers: [AppController],

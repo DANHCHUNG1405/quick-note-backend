@@ -4,25 +4,15 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  IsUUID,
-  Matches,
   Max,
   Min,
 } from 'class-validator';
-import { TODO_GROUP_TYPES } from './create-todo-group.dto';
+import { ROADMAP_STATUSES } from './create-roadmap.dto';
 
-export class TodoGroupQueryDto {
+export class RoadmapQueryDto {
   @IsOptional()
-  @IsIn(TODO_GROUP_TYPES)
-  groupType?: (typeof TODO_GROUP_TYPES)[number];
-
-  @IsOptional()
-  @IsUUID()
-  roadmapId?: string;
-
-  @IsOptional()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/)
-  groupDate?: string;
+  @IsIn(ROADMAP_STATUSES)
+  status?: (typeof ROADMAP_STATUSES)[number];
 
   @IsOptional()
   @IsString()

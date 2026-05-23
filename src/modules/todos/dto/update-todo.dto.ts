@@ -1,5 +1,4 @@
 import {
-  ValidateIf,
   IsDateString,
   IsIn,
   IsInt,
@@ -9,6 +8,7 @@ import {
   IsUUID,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
 import { TODO_PRIORITIES, TODO_STATUSES } from './create-todo.dto';
 
@@ -34,14 +34,6 @@ export class UpdateTodoDto {
   @IsOptional()
   @IsDateString()
   due_at?: string | null;
-
-  @IsOptional()
-  @IsUUID()
-  topic_id?: string | null;
-
-  @IsOptional()
-  @IsUUID()
-  note_id?: string | null;
 
   @IsOptional()
   @IsUUID()

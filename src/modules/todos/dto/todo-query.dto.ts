@@ -23,14 +23,6 @@ export class TodoQueryDto {
 
   @IsOptional()
   @IsUUID()
-  topicId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  noteId?: string;
-
-  @IsOptional()
-  @IsUUID()
   groupId?: string;
 
   @IsOptional()

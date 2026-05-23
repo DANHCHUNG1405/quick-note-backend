@@ -33,16 +33,7 @@ type TodoListResponse = {
   };
 };
 
-type ResolvedTodoRelations = {
-  topicId: string | null;
-  noteId: string | null;
-  groupId: string | null;
-};
-
-type TodoGroupOwner = Pick<
-  todo_groups,
-  'id' | 'user_id' | 'topic_id' | 'note_id' | 'deleted_at'
->;
+type TodoGroupOwner = Pick<todo_groups, 'id' | 'user_id' | 'deleted_at'>;
 
 const TODO_GROUP_SELECT = {
   id: true,
@@ -67,7 +58,7 @@ export class TodosService {
     return this.cache.rememberJson(
       `todos:user:${userId}:list:${this.serializeQuery(query)}`,
       45,
-      () => this.listWithResolvedFilter(userId, query),
+      () => this.listInternal(userId, query),
     );
   }
 
@@ -89,68 +80,40 @@ export class TodosService {
     todoId: string,
     dto: UpdateTodoDto,
   ): Promise<TodoWithGroup> {
-    const existingTodo = await this.findOwnedTodoOrThrow(userId, todoId);
+    const existing = await this.findOwnedTodoOrThrow(userId, todoId);
+
     const resolvedGroupId =
       this.extractGroupId(dto) === undefined
-        ? existingTodo.group_id
+        ? existing.group_id
         : (this.extractGroupId(dto) ?? null);
-    const relations = await this.resolveTodoRelations(
-      userId,
-      dto.topic_id === undefined ? existingTodo.topic_id : (dto.topic_id ?? null),
-      dto.note_id === undefined ? existingTodo.note_id : (dto.note_id ?? null),
-      resolvedGroupId,
-    );
+
+    if (resolvedGroupId) {
+      await this.findOwnedGroupOrThrow(userId, resolvedGroupId);
+    }
 
     const data: Prisma.todosUncheckedUpdateInput = {};
 
-    if (dto.title !== undefined) {
-      data.title = dto.title.trim();
-    }
-
-    if (dto.description !== undefined) {
-      data.description = dto.description;
-    }
-
-    if (dto.priority !== undefined) {
-      data.priority = dto.priority;
-    }
-
-    if (dto.due_at !== undefined) {
-      data.due_at = this.parseDateOrNull(dto.due_at);
-    }
-
-    if (dto.order_index !== undefined) {
-      data.order_index = dto.order_index;
-    }
+    if (dto.title !== undefined) data.title = dto.title.trim();
+    if (dto.description !== undefined) data.description = dto.description;
+    if (dto.priority !== undefined) data.priority = dto.priority;
+    if (dto.due_at !== undefined) data.due_at = this.parseDateOrNull(dto.due_at);
+    if (dto.order_index !== undefined) data.order_index = dto.order_index;
 
     if (
-      dto.topic_id !== undefined ||
-      dto.note_id !== undefined ||
       this.extractGroupId(dto) !== undefined ||
-      existingTodo.topic_id !== relations.topicId ||
-      existingTodo.note_id !== relations.noteId ||
-      existingTodo.group_id !== relations.groupId
+      existing.group_id !== resolvedGroupId
     ) {
-      data.topic_id = relations.topicId;
-      data.note_id = relations.noteId;
-      data.group_id = relations.groupId;
+      data.group_id = resolvedGroupId;
     }
 
     if (dto.status !== undefined) {
-      Object.assign(
-        data,
-        this.buildStatusData(dto.status, existingTodo.completed_at ?? null),
-      );
+      Object.assign(data, this.buildStatusData(dto.status, existing.completed_at ?? null));
     }
 
     const todo = await this.prisma.todos.update({
       where: { id: todoId },
       data,
-      include: {
-        todo_groups: {
-          select: TODO_GROUP_SELECT,
-        },
-      },
+      include: { todo_groups: { select: TODO_GROUP_SELECT } },
     });
 
     await this.invalidateTodoCaches(userId);
@@ -162,9 +125,7 @@ export class TodosService {
 
     await this.prisma.todos.update({
       where: { id: todoId },
-      data: {
-        deleted_at: new Date(),
-      },
+      data: { deleted_at: new Date() },
     });
 
     await this.invalidateTodoCaches(userId);
@@ -176,15 +137,8 @@ export class TodosService {
 
     const todo = await this.prisma.todos.update({
       where: { id: todoId },
-      data: {
-        status: 'COMPLETED',
-        completed_at: new Date(),
-      },
-      include: {
-        todo_groups: {
-          select: TODO_GROUP_SELECT,
-        },
-      },
+      data: { status: 'COMPLETED', completed_at: new Date() },
+      include: { todo_groups: { select: TODO_GROUP_SELECT } },
     });
 
     await this.invalidateTodoCaches(userId);
@@ -196,15 +150,8 @@ export class TodosService {
 
     const todo = await this.prisma.todos.update({
       where: { id: todoId },
-      data: {
-        status: 'PENDING',
-        completed_at: null,
-      },
-      include: {
-        todo_groups: {
-          select: TODO_GROUP_SELECT,
-        },
-      },
+      data: { status: 'PENDING', completed_at: null },
+      include: { todo_groups: { select: TODO_GROUP_SELECT } },
     });
 
     await this.invalidateTodoCaches(userId);
@@ -216,10 +163,7 @@ export class TodosService {
     groupId: string,
     query: TodoQueryDto = {},
   ): Promise<TodoListResponse> {
-    return this.list(userId, {
-      ...query,
-      groupId,
-    });
+    return this.list(userId, { ...query, groupId });
   }
 
   async createInGroup(
@@ -232,18 +176,8 @@ export class TodosService {
       throw new BadRequestException('group_id does not match target group');
     }
 
-    if (dto.topic_id && group.topic_id && dto.topic_id !== group.topic_id) {
-      throw new BadRequestException('topic_id does not match group topic_id');
-    }
-
-    if (dto.note_id && group.note_id && dto.note_id !== group.note_id) {
-      throw new BadRequestException('note_id does not match group note_id');
-    }
-
     const todo = await this.createWithOverrides(userId, {
       ...dto,
-      topic_id: dto.topic_id ?? group.topic_id ?? undefined,
-      note_id: dto.note_id ?? group.note_id ?? undefined,
       group_id: group.id,
       groupId: group.id,
     });
@@ -252,23 +186,10 @@ export class TodosService {
     return todo;
   }
 
-  async findOwnedGroupOrThrow(
-    userId: string,
-    groupId: string,
-  ): Promise<TodoGroupOwner> {
+  async findOwnedGroupOrThrow(userId: string, groupId: string): Promise<TodoGroupOwner> {
     const group = await this.prisma.todo_groups.findFirst({
-      where: {
-        id: groupId,
-        user_id: userId,
-        deleted_at: null,
-      },
-      select: {
-        id: true,
-        user_id: true,
-        topic_id: true,
-        note_id: true,
-        deleted_at: true,
-      },
+      where: { id: groupId, user_id: userId, deleted_at: null },
+      select: { id: true, user_id: true, deleted_at: true },
     });
 
     if (!group) {
@@ -281,13 +202,10 @@ export class TodosService {
   sortTodoItems<T extends { status: string; due_at: Date | null; order_index: number | null; created_at: Date | null }>(
     todos: T[],
   ): T[] {
-    return [...todos].sort((left, right) => this.compareTodoOrder(left, right));
+    return [...todos].sort((a, b) => this.compareTodoOrder(a, b));
   }
 
-  private async listWithResolvedFilter(
-    userId: string,
-    query: TodoQueryDto,
-  ): Promise<TodoListResponse> {
+  private async listInternal(userId: string, query: TodoQueryDto): Promise<TodoListResponse> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
@@ -297,49 +215,33 @@ export class TodosService {
 
     const todos = await this.prisma.todos.findMany({
       where: this.buildListWhere(userId, query),
-      include: {
-        todo_groups: {
-          select: TODO_GROUP_SELECT,
-        },
-      },
+      include: { todo_groups: { select: TODO_GROUP_SELECT } },
     });
 
-    const sortedTodos = this.sortTodoItems(todos).map((todo) =>
-      this.toTodoWithGroup(todo),
-    );
-    const total = sortedTodos.length;
+    const sorted = this.sortTodoItems(todos).map((t) => this.toTodoWithGroup(t));
+    const total = sorted.length;
     const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
     const start = (page - 1) * limit;
 
     return {
-      items: sortedTodos.slice(start, start + limit),
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages,
-      },
+      items: sorted.slice(start, start + limit),
+      meta: { page, limit, total, totalPages },
     };
   }
 
-  private async createWithOverrides(
-    userId: string,
-    dto: CreateTodoDto,
-  ): Promise<TodoWithGroup> {
-    const relations = await this.resolveTodoRelations(
-      userId,
-      dto.topic_id ?? null,
-      dto.note_id ?? null,
-      this.extractGroupId(dto) ?? null,
-    );
+  private async createWithOverrides(userId: string, dto: CreateTodoDto): Promise<TodoWithGroup> {
+    const groupId = this.extractGroupId(dto) ?? null;
+
+    if (groupId) {
+      await this.findOwnedGroupOrThrow(userId, groupId);
+    }
+
     const status = dto.status ?? 'PENDING';
 
     const todo = await this.prisma.todos.create({
       data: {
         user_id: userId,
-        topic_id: relations.topicId,
-        note_id: relations.noteId,
-        group_id: relations.groupId,
+        group_id: groupId,
         title: dto.title.trim(),
         description: dto.description ?? null,
         priority: dto.priority ?? 'NORMAL',
@@ -347,63 +249,25 @@ export class TodosService {
         order_index: dto.order_index ?? 0,
         ...this.buildStatusData(status, null, true),
       },
-      include: {
-        todo_groups: {
-          select: TODO_GROUP_SELECT,
-        },
-      },
+      include: { todo_groups: { select: TODO_GROUP_SELECT } },
     });
 
     return this.toTodoWithGroup(todo);
   }
 
-  private buildListWhere(
-    userId: string,
-    query: TodoQueryDto,
-  ): Prisma.todosWhereInput {
-    const conditions: Prisma.todosWhereInput[] = [
-      {
-        user_id: userId,
-        deleted_at: null,
-      },
-    ];
+  private buildListWhere(userId: string, query: TodoQueryDto): Prisma.todosWhereInput {
+    const conditions: Prisma.todosWhereInput[] = [{ user_id: userId, deleted_at: null }];
 
-    if (query.status) {
-      conditions.push({ status: query.status });
-    }
+    if (query.status) conditions.push({ status: query.status });
+    if (query.priority) conditions.push({ priority: query.priority });
+    if (query.groupId) conditions.push({ group_id: query.groupId });
 
-    if (query.priority) {
-      conditions.push({ priority: query.priority });
-    }
-
-    if (query.topicId) {
-      conditions.push({ topic_id: query.topicId });
-    }
-
-    if (query.noteId) {
-      conditions.push({ note_id: query.noteId });
-    }
-
-    if (query.groupId) {
-      conditions.push({ group_id: query.groupId });
-    }
-
-    const trimmedSearch = query.search?.trim();
-    if (trimmedSearch) {
+    const trimmed = query.search?.trim();
+    if (trimmed) {
       conditions.push({
         OR: [
-          {
-            title: {
-              contains: trimmedSearch,
-              mode: 'insensitive',
-            },
-          },
-          {
-            description: {
-              contains: trimmedSearch,
-              mode: 'insensitive',
-            },
-          },
+          { title: { contains: trimmed, mode: 'insensitive' } },
+          { description: { contains: trimmed, mode: 'insensitive' } },
         ],
       });
     }
@@ -412,261 +276,91 @@ export class TodosService {
     const { startOfDay, endOfDay } = this.getCurrentDayRange(now);
 
     if (query.due === 'today') {
-      conditions.push({
-        due_at: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
-      });
+      conditions.push({ due_at: { gte: startOfDay, lte: endOfDay } });
     }
 
     if (query.due === 'upcoming') {
-      conditions.push({
-        due_at: {
-          gt: endOfDay,
-        },
-      });
+      conditions.push({ due_at: { gt: endOfDay } });
     }
 
     if (query.due === 'overdue') {
-      conditions.push({
-        due_at: {
-          lt: now,
-        },
-      });
-      conditions.push({
-        status: {
-          not: 'COMPLETED',
-        },
-      });
+      conditions.push({ due_at: { lt: now } });
+      conditions.push({ status: { not: 'COMPLETED' } });
     }
 
     return { AND: conditions };
   }
 
   private compareTodoOrder(
-    left: {
-      status: string;
-      due_at: Date | null;
-      order_index: number | null;
-      created_at: Date | null;
-    },
-    right: {
-      status: string;
-      due_at: Date | null;
-      order_index: number | null;
-      created_at: Date | null;
-    },
+    left: { status: string; due_at: Date | null; order_index: number | null; created_at: Date | null },
+    right: { status: string; due_at: Date | null; order_index: number | null; created_at: Date | null },
   ) {
-    const statusDifference =
-      this.getStatusRank(left.status) - this.getStatusRank(right.status);
-    if (statusDifference !== 0) {
-      return statusDifference;
-    }
+    const statusDiff = this.getStatusRank(left.status) - this.getStatusRank(right.status);
+    if (statusDiff !== 0) return statusDiff;
 
-    const dueDifference = this.compareNullableDates(left.due_at, right.due_at);
-    if (dueDifference !== 0) {
-      return dueDifference;
-    }
+    const dueDiff = this.compareNullableDates(left.due_at, right.due_at);
+    if (dueDiff !== 0) return dueDiff;
 
-    const orderDifference = (left.order_index ?? 0) - (right.order_index ?? 0);
-    if (orderDifference !== 0) {
-      return orderDifference;
-    }
+    const orderDiff = (left.order_index ?? 0) - (right.order_index ?? 0);
+    if (orderDiff !== 0) return orderDiff;
 
-    return this.compareNullableDates(
-      right.created_at ?? null,
-      left.created_at ?? null,
-    );
+    return this.compareNullableDates(right.created_at ?? null, left.created_at ?? null);
   }
 
   private getStatusRank(status: string) {
-    const statusRanks: Record<TodoStatus, number> = {
-      PENDING: 0,
-      COMPLETED: 1,
-      CANCELLED: 2,
-    };
-
-    return statusRanks[status as TodoStatus] ?? 99;
+    const ranks: Record<TodoStatus, number> = { PENDING: 0, COMPLETED: 1, CANCELLED: 2 };
+    return ranks[status as TodoStatus] ?? 99;
   }
 
   private compareNullableDates(left: Date | null, right: Date | null) {
-    if (left && right) {
-      return left.getTime() - right.getTime();
-    }
-
-    if (left) {
-      return -1;
-    }
-
-    if (right) {
-      return 1;
-    }
-
+    if (left && right) return left.getTime() - right.getTime();
+    if (left) return -1;
+    if (right) return 1;
     return 0;
   }
 
-  private async findOwnedTodoOrThrow(
-    userId: string,
-    todoId: string,
-  ): Promise<TodoWithGroupRow> {
+  private async findOwnedTodoOrThrow(userId: string, todoId: string): Promise<TodoWithGroupRow> {
     const todo = await this.prisma.todos.findFirst({
-      where: {
-        id: todoId,
-        user_id: userId,
-        deleted_at: null,
-      },
-      include: {
-        todo_groups: {
-          select: TODO_GROUP_SELECT,
-        },
-      },
+      where: { id: todoId, user_id: userId, deleted_at: null },
+      include: { todo_groups: { select: TODO_GROUP_SELECT } },
     });
 
-    if (!todo) {
-      throw new NotFoundException('Todo not found');
-    }
-
+    if (!todo) throw new NotFoundException('Todo not found');
     return todo;
   }
 
-  private async resolveTodoRelations(
-    userId: string,
-    topicId: string | null,
-    noteId: string | null,
-    groupId: string | null,
-  ): Promise<ResolvedTodoRelations> {
-    let resolvedTopicId = topicId;
-    let resolvedNoteId = noteId;
-
-    if (groupId) {
-      const group = await this.findOwnedGroupOrThrow(userId, groupId);
-
-      if (resolvedTopicId && group.topic_id && resolvedTopicId !== group.topic_id) {
-        throw new BadRequestException('topic_id does not match group topic_id');
-      }
-
-      if (resolvedNoteId && group.note_id && resolvedNoteId !== group.note_id) {
-        throw new BadRequestException('note_id does not match group note_id');
-      }
-
-      resolvedTopicId = resolvedTopicId ?? group.topic_id;
-      resolvedNoteId = resolvedNoteId ?? group.note_id;
-    }
-
-    if (resolvedTopicId) {
-      const topic = await this.prisma.topics.findFirst({
-        where: {
-          id: resolvedTopicId,
-          user_id: userId,
-          deleted_at: null,
-        },
-        select: { id: true },
-      });
-
-      if (!topic) {
-        throw new BadRequestException('Topic not found');
-      }
-    }
-
-    if (!resolvedNoteId) {
-      return {
-        topicId: resolvedTopicId,
-        noteId: null,
-        groupId,
-      };
-    }
-
-    const note = await this.prisma.notes.findFirst({
-      where: {
-        id: resolvedNoteId,
-        deleted_at: null,
-        topics: {
-          user_id: userId,
-          deleted_at: null,
-        },
-      },
-      select: {
-        id: true,
-        topic_id: true,
-      },
-    });
-
-    if (!note) {
-      throw new BadRequestException('Note not found');
-    }
-
-    if (resolvedTopicId && resolvedTopicId !== note.topic_id) {
-      throw new BadRequestException('note_id does not belong to topic_id');
-    }
-
-    resolvedTopicId = note.topic_id;
-
-    return {
-      topicId: resolvedTopicId,
-      noteId: note.id,
-      groupId,
-    };
-  }
-
-  private buildStatusData(
-    status: string,
-    currentCompletedAt: Date | null,
-    alwaysSetCompletedAt = false,
-  ) {
+  private buildStatusData(status: string, currentCompletedAt: Date | null, alwaysSet = false) {
     if (status === 'COMPLETED') {
       return {
         status,
-        completed_at:
-          alwaysSetCompletedAt || !currentCompletedAt
-            ? new Date()
-            : currentCompletedAt,
+        completed_at: alwaysSet || !currentCompletedAt ? new Date() : currentCompletedAt,
       };
     }
-
-    return {
-      status,
-      completed_at: null,
-    };
+    return { status, completed_at: null };
   }
 
   private parseDateOrNull(value: string | null | undefined) {
-    if (value === undefined) {
-      return undefined;
-    }
-
-    if (value === null) {
-      return null;
-    }
-
+    if (value === undefined) return undefined;
+    if (value === null) return null;
     return new Date(value);
   }
 
   private getCurrentDayRange(now: Date) {
     const startOfDay = new Date(now);
     startOfDay.setHours(0, 0, 0, 0);
-
     const endOfDay = new Date(now);
     endOfDay.setHours(23, 59, 59, 999);
-
     return { startOfDay, endOfDay };
   }
 
   private extractGroupId(dto: CreateTodoDto | UpdateTodoDto) {
-    if ('group_id' in dto && dto.group_id !== undefined) {
-      return dto.group_id;
-    }
-
-    if ('groupId' in dto && dto.groupId !== undefined) {
-      return dto.groupId;
-    }
-
+    if ('group_id' in dto && dto.group_id !== undefined) return dto.group_id;
+    if ('groupId' in dto && dto.groupId !== undefined) return dto.groupId;
     return undefined;
   }
 
   toTodoWithGroup(todo: TodoWithGroupRow): TodoWithGroup {
     const { todo_groups, ...rest } = todo;
-
     return {
       ...rest,
       group:
@@ -686,12 +380,10 @@ export class TodosService {
       due: query.due ?? null,
       groupId: query.groupId ?? null,
       limit: query.limit ?? 20,
-      noteId: query.noteId ?? null,
       page: query.page ?? 1,
       priority: query.priority ?? null,
       search: query.search?.trim() || null,
       status: query.status ?? null,
-      topicId: query.topicId ?? null,
     });
   }
 

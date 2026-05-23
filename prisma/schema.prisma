@@ -19,27 +19,23 @@ model notes {
   last_viewed_at DateTime?     @db.Timestamp(6)
   note_shares    note_shares[]
   topics         topics        @relation(fields: [topic_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_notes_topic")
-  todo_groups    todo_groups[]
-  todos          todos[]
 
   @@index([topic_id], map: "idx_notes_topic_id")
 }
 
 model topics {
-  id           String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  user_id      String        @db.Uuid
-  name         String        @db.VarChar(255)
-  order_index  Int?          @default(0)
-  created_at   DateTime?     @default(now()) @db.Timestamp(6)
-  updated_at   DateTime?     @default(now()) @db.Timestamp(6)
-  deleted_at   DateTime?     @db.Timestamp(6)
-  parent_id    String?       @db.Uuid
+  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id      String   @db.Uuid
+  name         String   @db.VarChar(255)
+  order_index  Int?     @default(0)
+  created_at   DateTime? @default(now()) @db.Timestamp(6)
+  updated_at   DateTime? @default(now()) @db.Timestamp(6)
+  deleted_at   DateTime? @db.Timestamp(6)
+  parent_id    String?  @db.Uuid
   notes        notes[]
-  todo_groups  todo_groups[]
-  todos        todos[]
-  topics       topics?       @relation("topicsTotopics", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_topics_parent")
-  other_topics topics[]      @relation("topicsTotopics")
-  users        users         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_topics_user")
+  topics       topics?  @relation("topicsTotopics", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_topics_parent")
+  other_topics topics[] @relation("topicsTotopics")
+  users        users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_topics_user")
 
   @@index([user_id], map: "idx_topics_user_id")
   @@index([user_id, parent_id], map: "idx_topics_user_parent")
@@ -58,6 +54,7 @@ model users {
   updated_at         DateTime?       @default(now()) @db.Timestamp(6)
   note_shares        note_shares[]
   notifications      notifications[]
+  roadmaps           roadmaps[]
   todo_groups        todo_groups[]
   todos              todos[]
   topics             topics[]
@@ -90,12 +87,30 @@ model notifications {
   @@index([user_id], map: "idx_notifications_user_id")
 }
 
+model roadmaps {
+  id          String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id     String        @db.Uuid
+  name        String        @db.VarChar(255)
+  description String?
+  start_date  DateTime      @db.Date
+  end_date    DateTime?     @db.Date
+  status      String        @default("ACTIVE") @db.VarChar(20)
+  color       String?       @db.VarChar(20)
+  order_index Int?          @default(0)
+  created_at  DateTime?     @default(now()) @db.Timestamp(6)
+  updated_at  DateTime?     @default(now()) @db.Timestamp(6)
+  deleted_at  DateTime?     @db.Timestamp(6)
+  users       users         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_roadmaps_user")
+  todo_groups todo_groups[]
+
+  @@index([user_id], map: "idx_roadmaps_user_id")
+  @@index([user_id, status], map: "idx_roadmaps_user_status")
+}
+
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model todos {
   id           String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   user_id      String       @db.Uuid
-  topic_id     String?      @db.Uuid
-  note_id      String?      @db.Uuid
   title        String       @db.VarChar(255)
   description  String?
   status       String       @default("PENDING") @db.VarChar(20)
@@ -108,8 +123,6 @@ model todos {
   deleted_at   DateTime?    @db.Timestamp(6)
   group_id     String?      @db.Uuid
   todo_groups  todo_groups? @relation(fields: [group_id], references: [id], onUpdate: NoAction, map: "fk_todos_group")
-  notes        notes?       @relation(fields: [note_id], references: [id], onUpdate: NoAction, map: "fk_todos_note")
-  topics       topics?      @relation(fields: [topic_id], references: [id], onUpdate: NoAction, map: "fk_todos_topic")
   users        users        @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_todos_user")
 
   @@index([group_id], map: "idx_todos_group_id")
@@ -118,27 +131,24 @@ model todos {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model todo_groups {
-  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  user_id     String    @db.Uuid
-  topic_id    String?   @db.Uuid
-  note_id     String?   @db.Uuid
-  name        String    @db.VarChar(255)
+  id          String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id     String     @db.Uuid
+  roadmap_id  String?    @db.Uuid
+  name        String     @db.VarChar(255)
   description String?
-  group_type  String    @default("CUSTOM") @db.VarChar(20)
-  group_date  DateTime? @db.Date
-  order_index Int?      @default(0)
-  created_at  DateTime? @default(now()) @db.Timestamp(6)
-  updated_at  DateTime? @default(now()) @db.Timestamp(6)
-  deleted_at  DateTime? @db.Timestamp(6)
-  notes       notes?    @relation(fields: [note_id], references: [id], onUpdate: NoAction, map: "fk_todo_groups_note")
-  topics      topics?   @relation(fields: [topic_id], references: [id], onUpdate: NoAction, map: "fk_todo_groups_topic")
-  users       users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_todo_groups_user")
+  group_type  String     @default("CUSTOM") @db.VarChar(20)
+  group_date  DateTime?  @db.Date
+  order_index Int?       @default(0)
+  created_at  DateTime?  @default(now()) @db.Timestamp(6)
+  updated_at  DateTime?  @default(now()) @db.Timestamp(6)
+  deleted_at  DateTime?  @db.Timestamp(6)
+  roadmaps    roadmaps?  @relation(fields: [roadmap_id], references: [id], onUpdate: NoAction, map: "fk_todo_groups_roadmap")
+  users       users      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_todo_groups_user")
   todos       todos[]
 
+  @@index([roadmap_id], map: "idx_todo_groups_roadmap_id")
   @@index([group_date], map: "idx_todo_groups_group_date")
   @@index([group_type], map: "idx_todo_groups_group_type")
-  @@index([note_id], map: "idx_todo_groups_note_id")
-  @@index([topic_id], map: "idx_todo_groups_topic_id")
   @@index([user_id, group_date], map: "idx_todo_groups_user_date")
   @@index([user_id], map: "idx_todo_groups_user_id")
 }
