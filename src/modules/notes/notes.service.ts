@@ -310,24 +310,24 @@ export class NotesService {
     return this.cache.rememberJson(
       `notes:user:${userId}:note:${noteId}:shares`,
       60,
-      () =>
-        this.prisma.note_shares.findMany({
-          where: {
-            note_id: noteId,
-          },
+      async () => {
+        const shares = await this.prisma.note_shares.findMany({
+          where: { note_id: noteId },
           select: {
             user_id: true,
             permission: true,
             created_at: true,
-            users: {
-              select: {
-                email: true,
-                fullname: true,
-              },
-            },
+            users: { select: { email: true, fullname: true } },
           },
           orderBy: { created_at: 'asc' },
-        }),
+        });
+
+        return shares.map(({ users, ...rest }) => ({
+          ...rest,
+          name: users.fullname,
+          email: users.email,
+        }));
+      },
     );
   }
 

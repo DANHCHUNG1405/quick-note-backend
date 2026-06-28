@@ -7,6 +7,7 @@ import { JwtStrategy } from './jwt.strategy';
 import { StringValue } from 'ms';
 import { TokenBlacklistService } from './token-blacklist.service';
 import { GoogleStrategy } from './google.strategy';
+import { NotificationsEmailService } from '../notifications/notifications.email.service';
 
 @Module({
   imports: [
@@ -19,6 +20,12 @@ import { GoogleStrategy } from './google.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, TokenBlacklistService, GoogleStrategy],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    TokenBlacklistService,
+    GoogleStrategy,
+    NotificationsEmailService,
+  ],
 })
 export class AuthModule {}

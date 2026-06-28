@@ -15,24 +15,27 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import type { CurrentUserData } from '../auth/current-user.decorator';
 import { CreateTaskDto } from '../tasks/dto/create-task.dto';
 import { TaskQueryDto } from '../tasks/dto/task-query.dto';
-import { CreateRoadmapDto } from './dto/create-roadmap.dto';
-import { RoadmapQueryDto } from './dto/roadmap-query.dto';
-import { UpdateRoadmapDto } from './dto/update-roadmap.dto';
-import { RoadmapsService } from './roadmaps.service';
+import { CreateTaskListDto } from './dto/create-task-list.dto';
+import { TaskListQueryDto } from './dto/task-list-query.dto';
+import { UpdateTaskListDto } from './dto/update-task-list.dto';
+import { TaskListsService } from './task-lists.service';
 
 @UseGuards(JwtAuthGuard)
-@Controller('roadmaps')
-export class RoadmapsController {
-  constructor(private readonly roadmapsService: RoadmapsService) {}
+@Controller('task-lists')
+export class TaskListsController {
+  constructor(private readonly taskListsService: TaskListsService) {}
 
   @Get()
-  list(@CurrentUser() user: CurrentUserData, @Query() query: RoadmapQueryDto) {
-    return this.roadmapsService.list(user.userId, query);
+  list(@CurrentUser() user: CurrentUserData, @Query() query: TaskListQueryDto) {
+    return this.taskListsService.list(user.userId, query);
   }
 
   @Post()
-  create(@CurrentUser() user: CurrentUserData, @Body() dto: CreateRoadmapDto) {
-    return this.roadmapsService.create(user.userId, dto);
+  create(
+    @CurrentUser() user: CurrentUserData,
+    @Body() dto: CreateTaskListDto,
+  ) {
+    return this.taskListsService.create(user.userId, dto);
   }
 
   @Get(':id')
@@ -40,16 +43,16 @@ export class RoadmapsController {
     @CurrentUser() user: CurrentUserData,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.roadmapsService.getById(user.userId, id);
+    return this.taskListsService.getById(user.userId, id);
   }
 
   @Patch(':id')
   update(
     @CurrentUser() user: CurrentUserData,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdateRoadmapDto,
+    @Body() dto: UpdateTaskListDto,
   ) {
-    return this.roadmapsService.update(user.userId, id, dto);
+    return this.taskListsService.update(user.userId, id, dto);
   }
 
   @Delete(':id')
@@ -57,7 +60,7 @@ export class RoadmapsController {
     @CurrentUser() user: CurrentUserData,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.roadmapsService.softDelete(user.userId, id);
+    return this.taskListsService.softDelete(user.userId, id);
   }
 
   @Get(':id/tasks')
@@ -66,7 +69,7 @@ export class RoadmapsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Query() query: TaskQueryDto,
   ) {
-    return this.roadmapsService.getTasks(user.userId, id, query);
+    return this.taskListsService.getTasks(user.userId, id, query);
   }
 
   @Post(':id/tasks')
@@ -75,6 +78,6 @@ export class RoadmapsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CreateTaskDto,
   ) {
-    return this.roadmapsService.createTask(user.userId, id, dto);
+    return this.taskListsService.createTask(user.userId, id, dto);
   }
 }

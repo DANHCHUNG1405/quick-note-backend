@@ -10,8 +10,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 import { NotesModule } from './modules/notes/notes.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
-import { TodosModule } from './modules/todos/todos.module';
-import { TodoGroupsModule } from './modules/todo-groups/todo-groups.module';
+import { TasksModule } from './modules/tasks/tasks.module';
+import { TaskListsModule } from './modules/task-lists/task-lists.module';
 import { RoadmapsModule } from './modules/roadmaps/roadmaps.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
 import { RateLimitModule } from './common/rate-limit/rate-limit.module';
@@ -28,8 +28,8 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     TopicsModule,
     NotesModule,
     NotificationsModule,
-    TodosModule,
-    TodoGroupsModule,
+    TasksModule,
+    TaskListsModule,
     RoadmapsModule,
     DashboardModule,
   ],

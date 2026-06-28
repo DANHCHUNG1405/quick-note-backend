@@ -5,13 +5,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type {
   DashboardRecentNote,
   DashboardStats,
-  DashboardTodoItem,
+  DashboardTaskItem,
 } from './dashboard.types';
 
-const TODO_STATUSES = ['PENDING', 'COMPLETED', 'CANCELLED'] as const;
-const TODO_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const;
-const TODO_GROUP_TYPES = ['CUSTOM', 'DAILY'] as const;
-const TODO_GROUP_STATUSES = ['PENDING', 'COMPLETED'] as const;
+const TASK_STATUSES = ['PENDING', 'COMPLETED', 'CANCELLED'] as const;
+const TASK_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const;
+const ROADMAP_STATUSES = ['ACTIVE', 'COMPLETED', 'ARCHIVED'] as const;
 
 @Injectable()
 export class DashboardService {
@@ -36,12 +35,12 @@ export class DashboardService {
       topics: { user_id: userId, deleted_at: null },
     };
 
-    const ownedTodosWhere: Prisma.todosWhereInput = {
+    const ownedTasksWhere: Prisma.tasksWhereInput = {
       user_id: userId,
       deleted_at: null,
     };
 
-    const ownedTodoGroupsWhere: Prisma.todo_groupsWhereInput = {
+    const ownedRoadmapsWhere: Prisma.roadmapsWhereInput = {
       user_id: userId,
       deleted_at: null,
     };
@@ -54,16 +53,16 @@ export class DashboardService {
       updatedLast7DaysNotes,
       sharedWithMe,
       sharedByMe,
-      todoGroups,
-      todos,
-      todosByStatus,
-      todosByPriority,
-      todoGroupsByType,
-      todoGroupsByStatus,
+      taskLists,
+      roadmaps,
+      tasks,
+      tasksByStatus,
+      tasksByPriority,
+      roadmapsByStatus,
       notifications,
       unreadNotifications,
       recentNotes,
-      recentTodos,
+      recentTasks,
     ] = await Promise.all([
       this.prisma.topics.count({ where: { user_id: userId, deleted_at: null } }),
       this.prisma.notes.count({ where: ownedNotesWhere }),
@@ -76,26 +75,22 @@ export class DashboardService {
       this.prisma.note_shares.count({
         where: { notes: { deleted_at: null, topics: { user_id: userId, deleted_at: null } } },
       }),
-      this.prisma.todo_groups.count({ where: ownedTodoGroupsWhere }),
-      this.prisma.todos.count({ where: ownedTodosWhere }),
-      this.prisma.todos.groupBy({
+      this.prisma.task_lists.count({ where: { user_id: userId, deleted_at: null } }),
+      this.prisma.roadmaps.count({ where: ownedRoadmapsWhere }),
+      this.prisma.tasks.count({ where: ownedTasksWhere }),
+      this.prisma.tasks.groupBy({
         by: ['status'],
-        where: ownedTodosWhere,
+        where: ownedTasksWhere,
         _count: { _all: true },
       }),
-      this.prisma.todos.groupBy({
+      this.prisma.tasks.groupBy({
         by: ['priority'],
-        where: ownedTodosWhere,
+        where: ownedTasksWhere,
         _count: { _all: true },
       }),
-      this.prisma.todo_groups.groupBy({
-        by: ['group_type'],
-        where: ownedTodoGroupsWhere,
-        _count: { _all: true },
-      }),
-      this.prisma.todo_groups.groupBy({
+      this.prisma.roadmaps.groupBy({
         by: ['status'],
-        where: ownedTodoGroupsWhere,
+        where: ownedRoadmapsWhere,
         _count: { _all: true },
       }),
       this.prisma.notifications.count({ where: { user_id: userId } }),
@@ -114,19 +109,18 @@ export class DashboardService {
         orderBy: [{ last_viewed_at: { sort: 'desc', nulls: 'last' } }, { updated_at: 'desc' }],
         take: 5,
       }),
-      this.prisma.todos.findMany({
-        where: { ...ownedTodosWhere, status: 'PENDING' },
-        select: this.todoItemSelect(),
+      this.prisma.tasks.findMany({
+        where: { ...ownedTasksWhere, status: 'PENDING' },
+        select: this.taskItemSelect(),
         orderBy: [{ created_at: 'desc' }],
         take: 5,
       }),
     ]);
 
-    const statusCounts = this.mapCounts(todosByStatus, TODO_STATUSES, 'status');
-    const priorityCounts = this.mapCounts(todosByPriority, TODO_PRIORITIES, 'priority');
-    const groupTypeCounts = this.mapCounts(todoGroupsByType, TODO_GROUP_TYPES, 'group_type');
-    const groupStatusCounts = this.mapCounts(todoGroupsByStatus, TODO_GROUP_STATUSES, 'status');
-    const completedTodos = statusCounts.COMPLETED;
+    const statusCounts = this.mapCounts(tasksByStatus, TASK_STATUSES, 'status');
+    const priorityCounts = this.mapCounts(tasksByPriority, TASK_PRIORITIES, 'priority');
+    const roadmapStatusCounts = this.mapCounts(roadmapsByStatus, ROADMAP_STATUSES, 'status');
+    const completedTasks = statusCounts.COMPLETED;
 
     return {
       generatedAt: now.toISOString(),
@@ -136,10 +130,11 @@ export class DashboardService {
         pinnedNotes,
         sharedWithMe,
         sharedByMe,
-        todoGroups,
-        todos,
-        pendingTodos: statusCounts.PENDING,
-        completedTodos,
+        taskLists,
+        roadmaps,
+        tasks,
+        pendingTasks: statusCounts.PENDING,
+        completedTasks,
         unreadNotifications,
       },
       notes: {
@@ -150,12 +145,12 @@ export class DashboardService {
         sharedWithMe,
         sharedByMe,
       },
-      todos: {
-        total: todos,
+      tasks: {
+        total: tasks,
         pending: statusCounts.PENDING,
-        completed: completedTodos,
+        completed: completedTasks,
         cancelled: statusCounts.CANCELLED,
-        completionRate: todos === 0 ? 0 : Math.round((completedTodos / todos) * 100),
+        completionRate: tasks === 0 ? 0 : Math.round((completedTasks / tasks) * 100),
         byPriority: {
           LOW: priorityCounts.LOW,
           NORMAL: priorityCounts.NORMAL,
@@ -163,12 +158,14 @@ export class DashboardService {
           URGENT: priorityCounts.URGENT,
         },
       },
-      todoGroups: {
-        total: todoGroups,
-        pending: groupStatusCounts.PENDING,
-        completed: groupStatusCounts.COMPLETED,
-        custom: groupTypeCounts.CUSTOM,
-        daily: groupTypeCounts.DAILY,
+      taskLists: {
+        total: taskLists,
+      },
+      roadmaps: {
+        total: roadmaps,
+        active: roadmapStatusCounts.ACTIVE,
+        completed: roadmapStatusCounts.COMPLETED,
+        archived: roadmapStatusCounts.ARCHIVED,
       },
       notifications: {
         total: notifications,
@@ -184,43 +181,40 @@ export class DashboardService {
           lastViewedAt: note.last_viewed_at?.toISOString() ?? null,
           updatedAt: note.updated_at?.toISOString() ?? null,
         })),
-        recentTodos: recentTodos.map((todo) => this.toTodoItem(todo)),
+        recentTasks: recentTasks.map((task) => this.toTaskItem(task)),
       },
     };
   }
 
-  private todoItemSelect() {
+  private taskItemSelect() {
     return {
       id: true,
       title: true,
       status: true,
       priority: true,
-      group_id: true,
-      todo_groups: {
-        select: {
-          name: true,
-          group_date: true,
-        },
-      },
-    } satisfies Prisma.todosSelect;
+      list_id: true,
+      roadmap_id: true,
+      due_date: true,
+    } satisfies Prisma.tasksSelect;
   }
 
-  private toTodoItem(todo: {
+  private toTaskItem(task: {
     id: string;
     title: string;
     status: string;
     priority: string;
-    group_id: string | null;
-    todo_groups: { name: string; group_date: Date | null } | null;
-  }): DashboardTodoItem {
+    list_id: string | null;
+    roadmap_id: string | null;
+    due_date: Date | null;
+  }): DashboardTaskItem {
     return {
-      id: todo.id,
-      title: todo.title,
-      status: todo.status,
-      priority: todo.priority,
-      groupId: todo.group_id,
-      groupName: todo.todo_groups?.name ?? null,
-      groupDate: todo.todo_groups?.group_date?.toISOString() ?? null,
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      listId: task.list_id,
+      roadmapId: task.roadmap_id,
+      dueDate: task.due_date?.toISOString() ?? null,
     };
   }
 

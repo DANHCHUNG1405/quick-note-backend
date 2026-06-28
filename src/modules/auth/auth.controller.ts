@@ -14,6 +14,8 @@ import type { Response, Request } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { Public } from 'src/common/decorators/public.decorator';
 import { GoogleOauthGuard } from './google-oauth.guard';
 import { CurrentUser } from './current-user.decorator';
@@ -28,6 +30,41 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   register(@Body() body: RegisterDto) {
     return this.authService.register(body);
+  }
+
+  @Public()
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  async verifyEmail(
+    @Body() body: VerifyEmailDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { accessToken, refreshToken, user } =
+      await this.authService.verifyEmail(body);
+
+    res.cookie('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production' || true,
+      sameSite: 'none',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/api/auth/refresh',
+    });
+
+    return { message: 'Email verified', access_token: accessToken, user };
+  }
+
+  @Public()
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({
+    auth: {
+      limit: 3,
+      ttl: 60_000,
+      blockDuration: 60_000,
+    },
+  })
+  resendVerification(@Body() body: ResendVerificationDto) {
+    return this.authService.resendVerification(body);
   }
 
   @Public()

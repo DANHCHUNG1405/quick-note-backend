@@ -4,13 +4,13 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  IsUUID,
+  Matches,
   MaxLength,
   Min,
 } from 'class-validator';
-import { TODO_PRIORITIES, TODO_STATUSES } from './create-todo.dto';
+import { TASK_PRIORITIES, TASK_STATUSES } from './create-task.dto';
 
-export class UpdateTodoDto {
+export class UpdateTaskDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
@@ -22,16 +22,16 @@ export class UpdateTodoDto {
   description?: string | null;
 
   @IsOptional()
-  @IsIn(TODO_STATUSES)
-  status?: (typeof TODO_STATUSES)[number];
+  @IsIn(TASK_STATUSES)
+  status?: (typeof TASK_STATUSES)[number];
 
   @IsOptional()
-  @IsIn(TODO_PRIORITIES)
-  priority?: (typeof TODO_PRIORITIES)[number];
+  @IsIn(TASK_PRIORITIES)
+  priority?: (typeof TASK_PRIORITIES)[number];
 
   @IsOptional()
-  @IsUUID()
-  group_id?: string;
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  due_date?: string | null;
 
   @IsOptional()
   @IsInt()

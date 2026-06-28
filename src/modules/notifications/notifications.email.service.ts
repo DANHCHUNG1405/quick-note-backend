@@ -8,6 +8,13 @@ export type NoteSharedEmailPayload = {
   recipientName?: string | null;
 };
 
+export type VerificationEmailPayload = {
+  to: string;
+  code: string;
+  recipientName?: string | null;
+  expiresInMinutes?: number;
+};
+
 @Injectable()
 export class NotificationsEmailService {
   private readonly logger = new Logger(NotificationsEmailService.name);
@@ -68,6 +75,58 @@ export class NotificationsEmailService {
     } catch (error) {
       this.logger.warn(
         'Failed to send share email',
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
+  async sendVerificationEmail(payload: VerificationEmailPayload): Promise<void> {
+    const transporter = this.getTransporter();
+    if (!transporter) {
+      this.logger.warn(
+        `SMTP not configured: verification code for ${payload.to} is ${payload.code}`,
+      );
+      return;
+    }
+
+    const from = process.env.SMTP_FROM ?? 'no-reply@quicknote.local';
+    const recipientName = payload.recipientName?.trim() || 'there';
+    const expiresInMinutes = payload.expiresInMinutes ?? 10;
+
+    const subject = 'Your QuickNote verification code';
+    const text = [
+      `Hi ${recipientName},`,
+      '',
+      'Use the code below to verify your QuickNote account:',
+      '',
+      payload.code,
+      '',
+      `This code expires in ${expiresInMinutes} minutes.`,
+      'If you did not request this, you can ignore this email.',
+      '',
+      'Thanks,',
+      'QuickNote',
+    ].join('\n');
+
+    const html = [
+      `<p>Hi ${this.escapeHtml(recipientName)},</p>`,
+      '<p>Use the code below to verify your QuickNote account:</p>',
+      `<p style="font-size:28px;font-weight:700;letter-spacing:6px;">${this.escapeHtml(payload.code)}</p>`,
+      `<p>This code expires in ${expiresInMinutes} minutes. If you did not request this, you can ignore this email.</p>`,
+      '<p>Thanks,<br/>QuickNote</p>',
+    ].join('');
+
+    try {
+      await transporter.sendMail({
+        from,
+        to: payload.to,
+        subject,
+        text,
+        html,
+      });
+    } catch (error) {
+      this.logger.warn(
+        'Failed to send verification email',
         error instanceof Error ? error.message : String(error),
       );
     }

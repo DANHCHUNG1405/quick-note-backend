@@ -6,10 +6,11 @@ export type DashboardStats = {
     pinnedNotes: number;
     sharedWithMe: number;
     sharedByMe: number;
-    todoGroups: number;
-    todos: number;
-    pendingTodos: number;
-    completedTodos: number;
+    taskLists: number;
+    roadmaps: number;
+    tasks: number;
+    pendingTasks: number;
+    completedTasks: number;
     unreadNotifications: number;
   };
   notes: {
@@ -20,7 +21,7 @@ export type DashboardStats = {
     sharedWithMe: number;
     sharedByMe: number;
   };
-  todos: {
+  tasks: {
     total: number;
     pending: number;
     completed: number;
@@ -33,12 +34,14 @@ export type DashboardStats = {
       URGENT: number;
     };
   };
-  todoGroups: {
+  taskLists: {
     total: number;
-    pending: number;
+  };
+  roadmaps: {
+    total: number;
+    active: number;
     completed: number;
-    custom: number;
-    daily: number;
+    archived: number;
   };
   notifications: {
     total: number;
@@ -46,7 +49,7 @@ export type DashboardStats = {
   };
   activity: {
     recentNotes: DashboardRecentNote[];
-    recentTodos: DashboardTodoItem[];
+    recentTasks: DashboardTaskItem[];
   };
 };
 
@@ -60,12 +63,12 @@ export type DashboardRecentNote = {
   updatedAt: string | null;
 };
 
-export type DashboardTodoItem = {
+export type DashboardTaskItem = {
   id: string;
   title: string;
   status: string;
   priority: string;
-  groupId: string | null;
-  groupName: string | null;
-  groupDate: string | null;
+  listId: string | null;
+  roadmapId: string | null;
+  dueDate: string | null;
 };

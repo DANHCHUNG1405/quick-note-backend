@@ -42,21 +42,24 @@ model topics {
 }
 
 model users {
-  id                 String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  email              String          @unique @db.VarChar(255)
-  password_hash      String?
-  fullname           String?         @db.VarChar(50)
-  avatar             String?         @db.VarChar(255)
-  google_id          String?         @unique @db.VarChar(255)
-  provider           String?         @default("LOCAL") @db.VarChar(50)
-  refresh_token_hash String?
-  created_at         DateTime?       @default(now()) @db.Timestamp(6)
-  updated_at         DateTime?       @default(now()) @db.Timestamp(6)
+  id                   String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  email                String          @unique @db.VarChar(255)
+  password_hash        String?
+  fullname             String?         @db.VarChar(50)
+  avatar               String?         @db.VarChar(255)
+  google_id            String?         @unique @db.VarChar(255)
+  provider             String?         @default("LOCAL") @db.VarChar(50)
+  refresh_token_hash   String?
+  email_verified       Boolean         @default(false)
+  verification_code    String?         @db.VarChar(255)
+  verification_expires DateTime?       @db.Timestamp(6)
+  created_at           DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at           DateTime?       @default(now()) @db.Timestamp(6)
   note_shares        note_shares[]
   notifications      notifications[]
   roadmaps           roadmaps[]
-  todo_groups        todo_groups[]
-  todos              todos[]
+  task_lists         task_lists[]
+  tasks              tasks[]
   topics             topics[]
 }
 
@@ -101,56 +104,50 @@ model roadmaps {
   updated_at  DateTime?     @default(now()) @db.Timestamp(6)
   deleted_at  DateTime?     @db.Timestamp(6)
   users       users         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_roadmaps_user")
-  todo_groups todo_groups[]
+  tasks       tasks[]
 
   @@index([user_id], map: "idx_roadmaps_user_id")
   @@index([user_id, status], map: "idx_roadmaps_user_status")
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-model todos {
-  id           String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  user_id      String       @db.Uuid
-  title        String       @db.VarChar(255)
-  description  String?
-  status       String       @default("PENDING") @db.VarChar(20)
-  priority     String       @default("NORMAL") @db.VarChar(20)
-  completed_at DateTime?    @db.Timestamp(6)
-  order_index  Int?         @default(0)
-  created_at   DateTime?    @default(now()) @db.Timestamp(6)
-  updated_at   DateTime?    @default(now()) @db.Timestamp(6)
-  deleted_at   DateTime?    @db.Timestamp(6)
-  group_id     String?      @db.Uuid
-  todo_groups  todo_groups? @relation(fields: [group_id], references: [id], onUpdate: NoAction, map: "fk_todos_group")
-  users        users        @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_todos_user")
+model task_lists {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id     String    @db.Uuid
+  name        String    @db.VarChar(255)
+  description String?
+  order_index Int?      @default(0)
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+  updated_at  DateTime? @default(now()) @db.Timestamp(6)
+  deleted_at  DateTime? @db.Timestamp(6)
+  users       users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_task_lists_user")
+  tasks       tasks[]
 
-  @@index([group_id], map: "idx_todos_group_id")
-  @@index([user_id, group_id], map: "idx_todos_user_group")
+  @@index([user_id], map: "idx_task_lists_user_id")
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-model todo_groups {
-  id          String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  user_id     String     @db.Uuid
-  roadmap_id  String?    @db.Uuid
-  name        String     @db.VarChar(255)
-  description String?
-  group_type  String     @default("CUSTOM") @db.VarChar(20)
-  group_date  DateTime?  @db.Date
-  status      String     @default("PENDING") @db.VarChar(20)
-  order_index Int?       @default(0)
-  created_at  DateTime?  @default(now()) @db.Timestamp(6)
-  updated_at  DateTime?  @default(now()) @db.Timestamp(6)
-  deleted_at  DateTime?  @db.Timestamp(6)
-  roadmaps    roadmaps?  @relation(fields: [roadmap_id], references: [id], onUpdate: NoAction, map: "fk_todo_groups_roadmap")
-  users       users      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_todo_groups_user")
-  todos       todos[]
+/// A task belongs to EITHER a task_list (list_id) OR a roadmap (roadmap_id) — exactly one is set.
+model tasks {
+  id           String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id      String      @db.Uuid
+  list_id      String?     @db.Uuid
+  roadmap_id   String?     @db.Uuid
+  due_date     DateTime?   @db.Date
+  title        String      @db.VarChar(255)
+  description  String?
+  status       String      @default("PENDING") @db.VarChar(20)
+  priority     String      @default("NORMAL") @db.VarChar(20)
+  completed_at DateTime?   @db.Timestamp(6)
+  order_index  Int?        @default(0)
+  created_at   DateTime?   @default(now()) @db.Timestamp(6)
+  updated_at   DateTime?   @default(now()) @db.Timestamp(6)
+  deleted_at   DateTime?   @db.Timestamp(6)
+  task_lists   task_lists? @relation(fields: [list_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_tasks_list")
+  roadmaps     roadmaps?   @relation(fields: [roadmap_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_tasks_roadmap")
+  users        users       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_tasks_user")
 
-  @@index([roadmap_id], map: "idx_todo_groups_roadmap_id")
-  @@index([group_date], map: "idx_todo_groups_group_date")
-  @@index([group_type], map: "idx_todo_groups_group_type")
-  @@index([user_id, group_date], map: "idx_todo_groups_user_date")
-  @@index([user_id], map: "idx_todo_groups_user_id")
+  @@index([list_id], map: "idx_tasks_list_id")
+  @@index([roadmap_id, due_date], map: "idx_tasks_roadmap_due")
+  @@index([user_id], map: "idx_tasks_user_id")
 }
 
 enum todo_priority {

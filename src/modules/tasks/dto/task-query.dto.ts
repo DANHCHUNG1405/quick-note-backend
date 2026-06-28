@@ -4,24 +4,25 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  IsUUID,
+  Matches,
   Max,
   Min,
 } from 'class-validator';
-import { TODO_PRIORITIES, TODO_STATUSES } from './create-todo.dto';
+import { TASK_PRIORITIES, TASK_STATUSES } from './create-task.dto';
 
-export class TodoQueryDto {
+export class TaskQueryDto {
   @IsOptional()
-  @IsIn(TODO_STATUSES)
-  status?: (typeof TODO_STATUSES)[number];
-
-  @IsOptional()
-  @IsIn(TODO_PRIORITIES)
-  priority?: (typeof TODO_PRIORITIES)[number];
+  @IsIn(TASK_STATUSES)
+  status?: (typeof TASK_STATUSES)[number];
 
   @IsOptional()
-  @IsUUID()
-  groupId?: string;
+  @IsIn(TASK_PRIORITIES)
+  priority?: (typeof TASK_PRIORITIES)[number];
+
+  // Filter roadmap tasks by a specific day.
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  due_date?: string;
 
   @IsOptional()
   @IsString()
