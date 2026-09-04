@@ -16,7 +16,10 @@ type JoinNoteResult = {
 
 @Injectable()
 export class NotePresenceService {
-  private readonly noteUsers = new Map<string, Map<string, NotePresenceEntry>>();
+  private readonly noteUsers = new Map<
+    string,
+    Map<string, NotePresenceEntry>
+  >();
   private readonly socketNotes = new Map<string, Set<string>>();
 
   constructor(private readonly prisma: PrismaService) {}

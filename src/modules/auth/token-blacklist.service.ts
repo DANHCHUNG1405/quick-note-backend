@@ -40,7 +40,11 @@ export class TokenBlacklistService {
       return;
     }
 
-    await this.cache.setJson(this.getKey(type, normalizedToken), true, ttlSeconds);
+    await this.cache.setJson(
+      this.getKey(type, normalizedToken),
+      true,
+      ttlSeconds,
+    );
   }
 
   private async isBlacklisted(
@@ -52,12 +56,14 @@ export class TokenBlacklistService {
       return false;
     }
 
-    const value = await this.cache.getJson<boolean>(this.getKey(type, normalizedToken));
+    const value = await this.cache.getJson<boolean>(
+      this.getKey(type, normalizedToken),
+    );
     return value === true;
   }
 
   private getRemainingTtlSeconds(token: string) {
-    const decoded = this.jwtService.decode(token) as DecodedToken | null;
+    const decoded = this.jwtService.decode<DecodedToken>(token);
     if (!decoded?.exp) {
       return 0;
     }

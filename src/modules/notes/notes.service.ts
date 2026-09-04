@@ -94,20 +94,23 @@ export class NotesService {
    * GET RECENTLY VIEWED NOTES
    */
   async getRecentViewed(userId: string, limit = 5): Promise<Note[]> {
-    return this.cache.rememberJson(`notes:user:${userId}:recent:${limit}`, 30, () =>
-      this.prisma.notes.findMany({
-        where: {
-          deleted_at: null,
-          last_viewed_at: { not: null },
-          topics: {
-            user_id: userId,
+    return this.cache.rememberJson(
+      `notes:user:${userId}:recent:${limit}`,
+      30,
+      () =>
+        this.prisma.notes.findMany({
+          where: {
+            deleted_at: null,
+            last_viewed_at: { not: null },
+            topics: {
+              user_id: userId,
+            },
           },
-        },
-        orderBy: {
-          last_viewed_at: 'desc',
-        },
-        take: limit,
-      }),
+          orderBy: {
+            last_viewed_at: 'desc',
+          },
+          take: limit,
+        }),
     );
   }
 
@@ -335,33 +338,37 @@ export class NotesService {
    * LIST NOTES SHARED WITH CURRENT USER
    */
   async getSharedWithMe(userId: string): Promise<SharedNote[]> {
-    return this.cache.rememberJson(`notes:user:${userId}:shared`, 60, async () => {
-      const shares = await this.prisma.note_shares.findMany({
-        where: {
-          user_id: userId,
-          notes: {
-            deleted_at: null,
+    return this.cache.rememberJson(
+      `notes:user:${userId}:shared`,
+      60,
+      async () => {
+        const shares = await this.prisma.note_shares.findMany({
+          where: {
+            user_id: userId,
+            notes: {
+              deleted_at: null,
+            },
           },
-        },
-        select: {
-          permission: true,
-          notes: {
-            include: {
-              topics: {
-                select: { user_id: true },
+          select: {
+            permission: true,
+            notes: {
+              include: {
+                topics: {
+                  select: { user_id: true },
+                },
               },
             },
           },
-        },
-        orderBy: { created_at: 'desc' },
-      });
+          orderBy: { created_at: 'desc' },
+        });
 
-      return shares.map((share) => ({
-        ...this.stripNoteRelations(share.notes),
-        permission: this.normalizePermission(share.permission),
-        owner_id: share.notes.topics.user_id,
-      }));
-    });
+        return shares.map((share) => ({
+          ...this.stripNoteRelations(share.notes),
+          permission: this.normalizePermission(share.permission),
+          owner_id: share.notes.topics.user_id,
+        }));
+      },
+    );
   }
 
   /**
@@ -492,7 +499,9 @@ export class NotesService {
     topics?: { user_id: string };
     note_shares?: unknown;
   }) {
-    const { topics, note_shares, ...rest } = note as Record<string, unknown>;
+    const rest = { ...note } as Record<string, unknown>;
+    delete rest.topics;
+    delete rest.note_shares;
     return rest as Note;
   }
 

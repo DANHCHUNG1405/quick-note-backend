@@ -1,5 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, task_lists as TaskListModel, tasks as TaskModel } from '@prisma/client';
+import {
+  Prisma,
+  task_lists as TaskListModel,
+  tasks as TaskModel,
+} from '@prisma/client';
 import { RedisCacheService } from '../../infrastructure/redis/redis-cache.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTaskDto } from '../tasks/dto/create-task.dto';

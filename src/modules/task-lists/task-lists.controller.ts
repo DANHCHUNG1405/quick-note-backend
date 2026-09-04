@@ -31,10 +31,7 @@ export class TaskListsController {
   }
 
   @Post()
-  create(
-    @CurrentUser() user: CurrentUserData,
-    @Body() dto: CreateTaskListDto,
-  ) {
+  create(@CurrentUser() user: CurrentUserData, @Body() dto: CreateTaskListDto) {
     return this.taskListsService.create(user.userId, dto);
   }
 

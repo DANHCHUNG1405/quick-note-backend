@@ -18,6 +18,13 @@ import type { StringValue } from 'ms';
 
 const VERIFICATION_CODE_TTL_MINUTES = 10;
 
+export type GoogleProfile = {
+  email: string;
+  fullname: string;
+  avatar: string | null;
+  googleId: string;
+};
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -207,7 +214,7 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  async googleLogin(profile: any) {
+  async googleLogin(profile: GoogleProfile) {
     let user = await this.prisma.users.findUnique({
       where: { email: profile.email },
     });
@@ -330,7 +337,10 @@ export class AuthService {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
-      const isMatch = await bcrypt.compare(refreshToken, user.refresh_token_hash);
+      const isMatch = await bcrypt.compare(
+        refreshToken,
+        user.refresh_token_hash,
+      );
       if (!isMatch) {
         throw new UnauthorizedException('Invalid refresh token');
       }
@@ -345,7 +355,11 @@ export class AuthService {
     }
   }
 
-  async logout(accessToken: string | null, refreshToken: string | null, userId?: string) {
+  async logout(
+    accessToken: string | null,
+    refreshToken: string | null,
+    userId?: string,
+  ) {
     await Promise.all([
       accessToken
         ? this.tokenBlacklist.blacklistAccessToken(accessToken)
@@ -353,8 +367,13 @@ export class AuthService {
       refreshToken
         ? this.tokenBlacklist.blacklistRefreshToken(refreshToken)
         : Promise.resolve(),
-      userId 
-        ? this.prisma.users.update({ where: { id: userId }, data: { refresh_token_hash: null } }).catch(() => null)
+      userId
+        ? this.prisma.users
+            .update({
+              where: { id: userId },
+              data: { refresh_token_hash: null },
+            })
+            .catch(() => null)
         : Promise.resolve(),
     ]);
   }

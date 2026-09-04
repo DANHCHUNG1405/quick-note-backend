@@ -9,12 +9,13 @@ import {
 } from '@nestjs/websockets';
 import { JwtService } from '@nestjs/jwt';
 import { Logger } from '@nestjs/common';
-import type { Server, Socket } from 'socket.io';
+import type { DefaultEventsMap, Server, Socket } from 'socket.io';
 import type {
   NotificationSocketPayload,
   NotePresenceErrorSocketPayload,
 } from './notifications.types';
 import { NotePresenceService } from './note-presence.service';
+import type { JwtPayload } from '../auth/jwt-payload.interface';
 
 const allowedOrigins = [
   'http://localhost:3000',
@@ -24,6 +25,17 @@ const allowedOrigins = [
 type NotePresencePayload = {
   noteId?: unknown;
 };
+
+type SocketData = {
+  userId?: string;
+};
+
+type AuthenticatedSocket = Socket<
+  DefaultEventsMap,
+  DefaultEventsMap,
+  DefaultEventsMap,
+  SocketData
+>;
 
 @WebSocketGateway({
   namespace: '/notifications',
@@ -45,7 +57,7 @@ export class NotificationsGateway
     private readonly notePresence: NotePresenceService,
   ) {}
 
-  async handleConnection(client: Socket) {
+  async handleConnection(client: AuthenticatedSocket) {
     const token = this.extractToken(client);
 
     if (!token) {
@@ -54,11 +66,11 @@ export class NotificationsGateway
     }
 
     try {
-      const payload = await this.jwtService.verifyAsync(token, {
+      const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
         secret: process.env.JWT_ACCESS_SECRET as string,
       });
 
-      const userId = typeof payload === 'object' ? payload.sub : null;
+      const userId = payload.sub;
 
       if (!userId || typeof userId !== 'string') {
         client.disconnect();
@@ -76,7 +88,7 @@ export class NotificationsGateway
     }
   }
 
-  handleDisconnect(client: Socket) {
+  handleDisconnect(client: AuthenticatedSocket) {
     const userId = this.getClientUserId(client);
     if (!userId) {
       return;
@@ -90,7 +102,7 @@ export class NotificationsGateway
 
   @SubscribeMessage('note:join')
   async handleNoteJoin(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: NotePresencePayload,
   ) {
     const userId = this.getClientUserId(client);
@@ -140,7 +152,7 @@ export class NotificationsGateway
 
   @SubscribeMessage('note:leave')
   handleNoteLeave(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: NotePresencePayload,
   ) {
     const userId = this.getClientUserId(client);
@@ -183,30 +195,35 @@ export class NotificationsGateway
   }
 
   private emitNoteError(
-    client: Socket,
+    client: AuthenticatedSocket,
     payload: NotePresenceErrorSocketPayload,
   ) {
     client.emit('note:error', payload);
   }
 
-  private getClientUserId(client: Socket): string | null {
+  private getClientUserId(client: AuthenticatedSocket): string | null {
     return typeof client.data.userId === 'string' ? client.data.userId : null;
   }
 
   private getPayloadNoteId(payload: NotePresencePayload): string | undefined {
-    return typeof payload?.noteId === 'string' && payload.noteId.trim().length > 0
+    return typeof payload?.noteId === 'string' &&
+      payload.noteId.trim().length > 0
       ? payload.noteId.trim()
       : undefined;
   }
 
-  private extractToken(client: Socket): string | null {
-    const authToken = client.handshake.auth?.token;
+  private extractToken(client: AuthenticatedSocket): string | null {
+    const authToken = (client.handshake.auth as { token?: unknown } | undefined)
+      ?.token;
     if (typeof authToken === 'string' && authToken.length > 0) {
       return authToken;
     }
 
     const authorization = client.handshake.headers?.authorization;
-    if (typeof authorization === 'string' && authorization.startsWith('Bearer ')) {
+    if (
+      typeof authorization === 'string' &&
+      authorization.startsWith('Bearer ')
+    ) {
       return authorization.slice(7).trim();
     }
 

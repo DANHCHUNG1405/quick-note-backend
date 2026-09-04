@@ -12,6 +12,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Response, Request } from 'express';
 import { AuthService } from './auth.service';
+import type { GoogleProfile } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
@@ -147,8 +148,9 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { accessToken, refreshToken, user } =
-      await this.authService.googleLogin(req['user']);
+    const googleProfile = req.user as GoogleProfile;
+    const { accessToken, refreshToken } =
+      await this.authService.googleLogin(googleProfile);
 
     res.cookie('refresh_token', refreshToken, {
       httpOnly: true,

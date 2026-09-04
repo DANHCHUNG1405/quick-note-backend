@@ -257,8 +257,16 @@ export class TasksService {
   }
 
   private compareTaskOrder(
-    left: { status: string; order_index: number | null; created_at: Date | null },
-    right: { status: string; order_index: number | null; created_at: Date | null },
+    left: {
+      status: string;
+      order_index: number | null;
+      created_at: Date | null;
+    },
+    right: {
+      status: string;
+      order_index: number | null;
+      created_at: Date | null;
+    },
   ) {
     const statusDiff =
       this.getStatusRank(left.status) - this.getStatusRank(right.status);

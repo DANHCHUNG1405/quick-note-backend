@@ -21,7 +21,11 @@ export class RedisCacheService {
     }
   }
 
-  async setJson(key: string, value: unknown, ttlSeconds: number): Promise<void> {
+  async setJson(
+    key: string,
+    value: unknown,
+    ttlSeconds: number,
+  ): Promise<void> {
     try {
       await this.redis.set(key, JSON.stringify(value), 'EX', ttlSeconds);
     } catch (error) {

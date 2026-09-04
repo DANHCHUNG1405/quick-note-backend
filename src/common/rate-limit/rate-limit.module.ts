@@ -34,8 +34,7 @@ import type Redis from 'ioredis';
             skipIf: (context) => {
               const request = context.switchToHttp().getRequest<Request>();
               return !(
-                request.method === 'POST' &&
-                request.route?.path === '/auth/login'
+                request.method === 'POST' && request.path === '/auth/login'
               );
             },
           },

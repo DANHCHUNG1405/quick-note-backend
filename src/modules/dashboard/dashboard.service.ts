@@ -64,18 +64,33 @@ export class DashboardService {
       recentNotes,
       recentTasks,
     ] = await Promise.all([
-      this.prisma.topics.count({ where: { user_id: userId, deleted_at: null } }),
+      this.prisma.topics.count({
+        where: { user_id: userId, deleted_at: null },
+      }),
       this.prisma.notes.count({ where: ownedNotesWhere }),
-      this.prisma.notes.count({ where: { ...ownedNotesWhere, is_pinned: true } }),
-      this.prisma.notes.count({ where: { ...ownedNotesWhere, last_viewed_at: { not: null } } }),
-      this.prisma.notes.count({ where: { ...ownedNotesWhere, updated_at: { gte: sevenDaysAgo } } }),
+      this.prisma.notes.count({
+        where: { ...ownedNotesWhere, is_pinned: true },
+      }),
+      this.prisma.notes.count({
+        where: { ...ownedNotesWhere, last_viewed_at: { not: null } },
+      }),
+      this.prisma.notes.count({
+        where: { ...ownedNotesWhere, updated_at: { gte: sevenDaysAgo } },
+      }),
       this.prisma.note_shares.count({
         where: { user_id: userId, notes: { deleted_at: null } },
       }),
       this.prisma.note_shares.count({
-        where: { notes: { deleted_at: null, topics: { user_id: userId, deleted_at: null } } },
+        where: {
+          notes: {
+            deleted_at: null,
+            topics: { user_id: userId, deleted_at: null },
+          },
+        },
       }),
-      this.prisma.task_lists.count({ where: { user_id: userId, deleted_at: null } }),
+      this.prisma.task_lists.count({
+        where: { user_id: userId, deleted_at: null },
+      }),
       this.prisma.roadmaps.count({ where: ownedRoadmapsWhere }),
       this.prisma.tasks.count({ where: ownedTasksWhere }),
       this.prisma.tasks.groupBy({
@@ -94,7 +109,9 @@ export class DashboardService {
         _count: { _all: true },
       }),
       this.prisma.notifications.count({ where: { user_id: userId } }),
-      this.prisma.notifications.count({ where: { user_id: userId, is_read: false } }),
+      this.prisma.notifications.count({
+        where: { user_id: userId, is_read: false },
+      }),
       this.prisma.notes.findMany({
         where: ownedNotesWhere,
         select: {
@@ -106,7 +123,10 @@ export class DashboardService {
           updated_at: true,
           topics: { select: { name: true } },
         },
-        orderBy: [{ last_viewed_at: { sort: 'desc', nulls: 'last' } }, { updated_at: 'desc' }],
+        orderBy: [
+          { last_viewed_at: { sort: 'desc', nulls: 'last' } },
+          { updated_at: 'desc' },
+        ],
         take: 5,
       }),
       this.prisma.tasks.findMany({
@@ -118,8 +138,16 @@ export class DashboardService {
     ]);
 
     const statusCounts = this.mapCounts(tasksByStatus, TASK_STATUSES, 'status');
-    const priorityCounts = this.mapCounts(tasksByPriority, TASK_PRIORITIES, 'priority');
-    const roadmapStatusCounts = this.mapCounts(roadmapsByStatus, ROADMAP_STATUSES, 'status');
+    const priorityCounts = this.mapCounts(
+      tasksByPriority,
+      TASK_PRIORITIES,
+      'priority',
+    );
+    const roadmapStatusCounts = this.mapCounts(
+      roadmapsByStatus,
+      ROADMAP_STATUSES,
+      'status',
+    );
     const completedTasks = statusCounts.COMPLETED;
 
     return {
@@ -150,7 +178,8 @@ export class DashboardService {
         pending: statusCounts.PENDING,
         completed: completedTasks,
         cancelled: statusCounts.CANCELLED,
-        completionRate: tasks === 0 ? 0 : Math.round((completedTasks / tasks) * 100),
+        completionRate:
+          tasks === 0 ? 0 : Math.round((completedTasks / tasks) * 100),
         byPriority: {
           LOW: priorityCounts.LOW,
           NORMAL: priorityCounts.NORMAL,
@@ -172,15 +201,17 @@ export class DashboardService {
         unread: unreadNotifications,
       },
       activity: {
-        recentNotes: recentNotes.map((note): DashboardRecentNote => ({
-          id: note.id,
-          title: note.title,
-          topicId: note.topic_id,
-          topicName: note.topics.name,
-          isPinned: note.is_pinned ?? false,
-          lastViewedAt: note.last_viewed_at?.toISOString() ?? null,
-          updatedAt: note.updated_at?.toISOString() ?? null,
-        })),
+        recentNotes: recentNotes.map(
+          (note): DashboardRecentNote => ({
+            id: note.id,
+            title: note.title,
+            topicId: note.topic_id,
+            topicName: note.topics.name,
+            isPinned: note.is_pinned ?? false,
+            lastViewedAt: note.last_viewed_at?.toISOString() ?? null,
+            updatedAt: note.updated_at?.toISOString() ?? null,
+          }),
+        ),
         recentTasks: recentTasks.map((task) => this.toTaskItem(task)),
       },
     };
@@ -223,7 +254,10 @@ export class DashboardService {
     keys: readonly T[],
     field: K,
   ): Record<T, number> {
-    const counts = Object.fromEntries(keys.map((key) => [key, 0])) as Record<T, number>;
+    const counts = Object.fromEntries(keys.map((key) => [key, 0])) as Record<
+      T,
+      number
+    >;
 
     for (const row of rows) {
       const key = row[field];
@@ -235,7 +269,10 @@ export class DashboardService {
     return counts;
   }
 
-  private isKnownCountKey<T extends string>(value: string | null, keys: readonly T[]): value is T {
+  private isKnownCountKey<T extends string>(
+    value: string | null,
+    keys: readonly T[],
+  ): value is T {
     return value !== null && keys.includes(value as T);
   }
 }

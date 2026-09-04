@@ -3,7 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, roadmaps as RoadmapModel, tasks as TaskModel } from '@prisma/client';
+import {
+  Prisma,
+  roadmaps as RoadmapModel,
+  tasks as TaskModel,
+} from '@prisma/client';
 import { RedisCacheService } from '../../infrastructure/redis/redis-cache.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTaskDto } from '../tasks/dto/create-task.dto';
@@ -187,7 +191,11 @@ export class RoadmapsService {
   }
 
   async createTask(userId: string, roadmapId: string, dto: CreateTaskDto) {
-    const task = await this.tasksService.createInRoadmap(userId, roadmapId, dto);
+    const task = await this.tasksService.createInRoadmap(
+      userId,
+      roadmapId,
+      dto,
+    );
     await this.invalidateCaches(userId);
     return task;
   }
@@ -197,9 +205,7 @@ export class RoadmapsService {
     const dayMap = new Map<string, TaskModel[]>();
 
     for (const task of sorted) {
-      const key = task.due_date
-        ? task.due_date.toISOString().slice(0, 10)
-        : '';
+      const key = task.due_date ? task.due_date.toISOString().slice(0, 10) : '';
       const bucket = dayMap.get(key);
       if (bucket) {
         bucket.push(task);

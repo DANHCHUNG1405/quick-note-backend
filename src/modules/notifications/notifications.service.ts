@@ -13,18 +13,21 @@ export class NotificationsService {
    * GET /notifications
    */
   async list(userId: string) {
-    return this.cache.rememberJson(`notifications:user:${userId}:list`, 30, () =>
-      this.prisma.notifications.findMany({
-        where: { user_id: userId },
-        orderBy: { created_at: 'desc' },
-        select: {
-          id: true,
-          type: true,
-          message: true,
-          is_read: true,
-          created_at: true,
-        },
-      }),
+    return this.cache.rememberJson(
+      `notifications:user:${userId}:list`,
+      30,
+      () =>
+        this.prisma.notifications.findMany({
+          where: { user_id: userId },
+          orderBy: { created_at: 'desc' },
+          select: {
+            id: true,
+            type: true,
+            message: true,
+            is_read: true,
+            created_at: true,
+          },
+        }),
     );
   }
 

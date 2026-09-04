@@ -42,15 +42,11 @@ export class RateLimitGuard extends ThrottlerGuard {
     return `rate_limit:ip:${this.extractClientIp(req)}`;
   }
 
-  protected generateKey(
-    _context: ExecutionContext,
-    tracker: string,
-    _name: string,
-  ): string {
+  protected generateKey(_context: ExecutionContext, tracker: string): string {
     return tracker;
   }
 
-  protected async throwThrottlingException(): Promise<void> {
+  protected throwThrottlingException(): Promise<void> {
     throw new HttpException(
       {
         statusCode: HttpStatus.TOO_MANY_REQUESTS,
@@ -95,11 +91,7 @@ export class RateLimitGuard extends ThrottlerGuard {
       : forwardedFor;
     const realIp = forwardedValue?.split(',')[0]?.trim();
     const fallbackIp =
-      realIp ||
-      req.ip ||
-      req.ips?.[0] ||
-      req.socket.remoteAddress ||
-      'unknown';
+      realIp || req.ip || req.ips?.[0] || req.socket.remoteAddress || 'unknown';
 
     return fallbackIp.replace(/^::ffff:/, '');
   }

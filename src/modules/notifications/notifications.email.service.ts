@@ -80,7 +80,9 @@ export class NotificationsEmailService {
     }
   }
 
-  async sendVerificationEmail(payload: VerificationEmailPayload): Promise<void> {
+  async sendVerificationEmail(
+    payload: VerificationEmailPayload,
+  ): Promise<void> {
     const transporter = this.getTransporter();
     if (!transporter) {
       this.logger.warn(

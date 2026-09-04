@@ -3,7 +3,10 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { RedisCacheService } from '../../infrastructure/redis/redis-cache.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { NOTE_SHARED_JOB, NOTIFICATIONS_QUEUE } from './notifications.constants';
+import {
+  NOTE_SHARED_JOB,
+  NOTIFICATIONS_QUEUE,
+} from './notifications.constants';
 import {
   type NoteSharedEvent,
   type NotificationSocketPayload,
